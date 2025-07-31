@@ -3,24 +3,12 @@
   "WorkspaceRootPath": "C:\\Users\\woong\\OneDrive\\\uBB38\uC11C\\GitHub\\TDGameServer\\",
   "Documents": [
     {
-      "AbsoluteMoniker": "D:0:0:{0CE38A87-1562-4AF9-98C6-25CC8094B65F}|TDGameServer\\TDGameServer.csproj|c:\\users\\woong\\onedrive\\\uBB38\uC11C\\github\\tdgameserver\\tdgameserver\\appsettings.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}",
-      "RelativeMoniker": "D:0:0:{0CE38A87-1562-4AF9-98C6-25CC8094B65F}|TDGameServer\\TDGameServer.csproj|solutionrelative:tdgameserver\\appsettings.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}"
-    },
-    {
       "AbsoluteMoniker": "D:0:0:{0CE38A87-1562-4AF9-98C6-25CC8094B65F}|TDGameServer\\TDGameServer.csproj|c:\\users\\woong\\onedrive\\\uBB38\uC11C\\github\\tdgameserver\\tdgameserver\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
       "RelativeMoniker": "D:0:0:{0CE38A87-1562-4AF9-98C6-25CC8094B65F}|TDGameServer\\TDGameServer.csproj|solutionrelative:tdgameserver\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
-      "AbsoluteMoniker": "D:0:0:{0CE38A87-1562-4AF9-98C6-25CC8094B65F}|TDGameServer\\TDGameServer.csproj|c:\\users\\woong\\onedrive\\\uBB38\uC11C\\github\\tdgameserver\\tdgameserver\\models\\changepasswordrequest.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{0CE38A87-1562-4AF9-98C6-25CC8094B65F}|TDGameServer\\TDGameServer.csproj|solutionrelative:tdgameserver\\models\\changepasswordrequest.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{0CE38A87-1562-4AF9-98C6-25CC8094B65F}|TDGameServer\\TDGameServer.csproj|c:\\users\\woong\\onedrive\\\uBB38\uC11C\\github\\tdgameserver\\tdgameserver\\models\\registerrequest.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{0CE38A87-1562-4AF9-98C6-25CC8094B65F}|TDGameServer\\TDGameServer.csproj|solutionrelative:tdgameserver\\models\\registerrequest.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{0CE38A87-1562-4AF9-98C6-25CC8094B65F}|TDGameServer\\TDGameServer.csproj|c:\\users\\woong\\onedrive\\\uBB38\uC11C\\github\\tdgameserver\\tdgameserver\\models\\resetpasswordrequest.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{0CE38A87-1562-4AF9-98C6-25CC8094B65F}|TDGameServer\\TDGameServer.csproj|solutionrelative:tdgameserver\\models\\resetpasswordrequest.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+      "AbsoluteMoniker": "D:0:0:{0CE38A87-1562-4AF9-98C6-25CC8094B65F}|TDGameServer\\TDGameServer.csproj|c:\\users\\woong\\onedrive\\\uBB38\uC11C\\github\\tdgameserver\\tdgameserver\\models\\createroomrequest.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{0CE38A87-1562-4AF9-98C6-25CC8094B65F}|TDGameServer\\TDGameServer.csproj|solutionrelative:tdgameserver\\models\\createroomrequest.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
       "AbsoluteMoniker": "D:0:0:{0CE38A87-1562-4AF9-98C6-25CC8094B65F}|TDGameServer\\TDGameServer.csproj|c:\\users\\woong\\onedrive\\\uBB38\uC11C\\github\\tdgameserver\\tdgameserver\\requestdata.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
@@ -35,6 +23,10 @@
       "RelativeMoniker": "D:0:0:{0CE38A87-1562-4AF9-98C6-25CC8094B65F}|TDGameServer\\TDGameServer.csproj|solutionrelative:tdgameserver\\models\\lobbyenterrequest.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
+      "AbsoluteMoniker": "D:0:0:{0CE38A87-1562-4AF9-98C6-25CC8094B65F}|TDGameServer\\TDGameServer.csproj|c:\\users\\woong\\onedrive\\\uBB38\uC11C\\github\\tdgameserver\\tdgameserver\\models\\logoutrequest.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{0CE38A87-1562-4AF9-98C6-25CC8094B65F}|TDGameServer\\TDGameServer.csproj|solutionrelative:tdgameserver\\models\\logoutrequest.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
       "AbsoluteMoniker": "D:0:0:{0CE38A87-1562-4AF9-98C6-25CC8094B65F}|TDGameServer\\TDGameServer.csproj|c:\\users\\woong\\onedrive\\\uBB38\uC11C\\github\\tdgameserver\\tdgameserver\\models\\findemailrequest.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
       "RelativeMoniker": "D:0:0:{0CE38A87-1562-4AF9-98C6-25CC8094B65F}|TDGameServer\\TDGameServer.csproj|solutionrelative:tdgameserver\\models\\findemailrequest.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
@@ -43,8 +35,24 @@
       "RelativeMoniker": "D:0:0:{0CE38A87-1562-4AF9-98C6-25CC8094B65F}|TDGameServer\\TDGameServer.csproj|solutionrelative:tdgameserver\\models\\chatrequest.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
-      "AbsoluteMoniker": "D:0:0:{0CE38A87-1562-4AF9-98C6-25CC8094B65F}|TDGameServer\\TDGameServer.csproj|c:\\users\\woong\\onedrive\\\uBB38\uC11C\\github\\tdgameserver\\tdgameserver\\models\\logoutrequest.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{0CE38A87-1562-4AF9-98C6-25CC8094B65F}|TDGameServer\\TDGameServer.csproj|solutionrelative:tdgameserver\\models\\logoutrequest.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+      "AbsoluteMoniker": "D:0:0:{0CE38A87-1562-4AF9-98C6-25CC8094B65F}|TDGameServer\\TDGameServer.csproj|c:\\users\\woong\\onedrive\\\uBB38\uC11C\\github\\tdgameserver\\tdgameserver\\models\\changepasswordrequest.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{0CE38A87-1562-4AF9-98C6-25CC8094B65F}|TDGameServer\\TDGameServer.csproj|solutionrelative:tdgameserver\\models\\changepasswordrequest.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{0CE38A87-1562-4AF9-98C6-25CC8094B65F}|TDGameServer\\TDGameServer.csproj|c:\\users\\woong\\onedrive\\\uBB38\uC11C\\github\\tdgameserver\\tdgameserver\\appsettings.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}",
+      "RelativeMoniker": "D:0:0:{0CE38A87-1562-4AF9-98C6-25CC8094B65F}|TDGameServer\\TDGameServer.csproj|solutionrelative:tdgameserver\\appsettings.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{0CE38A87-1562-4AF9-98C6-25CC8094B65F}|TDGameServer\\TDGameServer.csproj|c:\\users\\woong\\onedrive\\\uBB38\uC11C\\github\\tdgameserver\\tdgameserver\\models\\systemchatrequest.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{0CE38A87-1562-4AF9-98C6-25CC8094B65F}|TDGameServer\\TDGameServer.csproj|solutionrelative:tdgameserver\\models\\systemchatrequest.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{0CE38A87-1562-4AF9-98C6-25CC8094B65F}|TDGameServer\\TDGameServer.csproj|c:\\users\\woong\\onedrive\\\uBB38\uC11C\\github\\tdgameserver\\tdgameserver\\models\\resetpasswordrequest.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{0CE38A87-1562-4AF9-98C6-25CC8094B65F}|TDGameServer\\TDGameServer.csproj|solutionrelative:tdgameserver\\models\\resetpasswordrequest.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{0CE38A87-1562-4AF9-98C6-25CC8094B65F}|TDGameServer\\TDGameServer.csproj|c:\\users\\woong\\onedrive\\\uBB38\uC11C\\github\\tdgameserver\\tdgameserver\\models\\registerrequest.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{0CE38A87-1562-4AF9-98C6-25CC8094B65F}|TDGameServer\\TDGameServer.csproj|solutionrelative:tdgameserver\\models\\registerrequest.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
       "AbsoluteMoniker": "D:0:0:{0CE38A87-1562-4AF9-98C6-25CC8094B65F}|TDGameServer\\TDGameServer.csproj|c:\\users\\woong\\onedrive\\\uBB38\uC11C\\github\\tdgameserver\\tdgameserver\\tdgameserver.csproj||{FA3CD31E-987B-443A-9B81-186104E8DAC1}|",
@@ -58,97 +66,37 @@
       "DocumentGroups": [
         {
           "DockedWidth": 200,
-          "SelectedChildIndex": 6,
+          "SelectedChildIndex": 1,
           "Children": [
             {
               "$type": "Document",
-              "DocumentIndex": 6,
-              "Title": "LoginRequest.cs",
-              "DocumentMoniker": "C:\\Users\\woong\\OneDrive\\\uBB38\uC11C\\GitHub\\TDGameServer\\TDGameServer\\Models\\LoginRequest.cs",
-              "RelativeDocumentMoniker": "TDGameServer\\Models\\LoginRequest.cs",
-              "ToolTip": "C:\\Users\\woong\\OneDrive\\\uBB38\uC11C\\GitHub\\TDGameServer\\TDGameServer\\Models\\LoginRequest.cs",
-              "RelativeToolTip": "TDGameServer\\Models\\LoginRequest.cs",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAwAAAA1AAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2025-07-29T17:07:41.212Z"
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 3,
-              "Title": "RegisterRequest.cs",
-              "DocumentMoniker": "C:\\Users\\woong\\OneDrive\\\uBB38\uC11C\\GitHub\\TDGameServer\\TDGameServer\\Models\\RegisterRequest.cs",
-              "RelativeDocumentMoniker": "TDGameServer\\Models\\RegisterRequest.cs",
-              "ToolTip": "C:\\Users\\woong\\OneDrive\\\uBB38\uC11C\\GitHub\\TDGameServer\\TDGameServer\\Models\\RegisterRequest.cs",
-              "RelativeToolTip": "TDGameServer\\Models\\RegisterRequest.cs",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAAA4AAAAFAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2025-07-29T17:07:11.566Z"
-            },
-            {
-              "$type": "Document",
               "DocumentIndex": 1,
+              "Title": "CreateRoomRequest.cs",
+              "DocumentMoniker": "C:\\Users\\woong\\OneDrive\\\uBB38\uC11C\\GitHub\\TDGameServer\\TDGameServer\\Models\\CreateRoomRequest.cs",
+              "RelativeDocumentMoniker": "TDGameServer\\Models\\CreateRoomRequest.cs",
+              "ToolTip": "C:\\Users\\woong\\OneDrive\\\uBB38\uC11C\\GitHub\\TDGameServer\\TDGameServer\\Models\\CreateRoomRequest.cs",
+              "RelativeToolTip": "TDGameServer\\Models\\CreateRoomRequest.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAwAAAABAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-07-31T20:53:42.865Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
               "Title": "Program.cs",
               "DocumentMoniker": "C:\\Users\\woong\\OneDrive\\\uBB38\uC11C\\GitHub\\TDGameServer\\TDGameServer\\Program.cs",
               "RelativeDocumentMoniker": "TDGameServer\\Program.cs",
               "ToolTip": "C:\\Users\\woong\\OneDrive\\\uBB38\uC11C\\GitHub\\TDGameServer\\TDGameServer\\Program.cs",
               "RelativeToolTip": "TDGameServer\\Program.cs",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAABkAAAAUAAAAAAAAAA==",
+              "ViewState": "AgIAADABAAAAAAAAAAAAAEEDAAAyAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
               "WhenOpened": "2025-07-29T16:31:56.599Z",
               "EditorCaption": ""
             },
             {
               "$type": "Document",
-              "DocumentIndex": 7,
-              "Title": "LobbyEnterRequest.cs",
-              "DocumentMoniker": "C:\\Users\\woong\\OneDrive\\\uBB38\uC11C\\GitHub\\TDGameServer\\TDGameServer\\Models\\LobbyEnterRequest.cs",
-              "RelativeDocumentMoniker": "TDGameServer\\Models\\LobbyEnterRequest.cs",
-              "ToolTip": "C:\\Users\\woong\\OneDrive\\\uBB38\uC11C\\GitHub\\TDGameServer\\TDGameServer\\Models\\LobbyEnterRequest.cs",
-              "RelativeToolTip": "TDGameServer\\Models\\LobbyEnterRequest.cs",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAAA0AAAAFAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2025-07-29T20:17:39.667Z"
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 4,
-              "Title": "ResetPasswordRequest.cs",
-              "DocumentMoniker": "C:\\Users\\woong\\OneDrive\\\uBB38\uC11C\\GitHub\\TDGameServer\\TDGameServer\\Models\\ResetPasswordRequest.cs",
-              "RelativeDocumentMoniker": "TDGameServer\\Models\\ResetPasswordRequest.cs",
-              "ToolTip": "C:\\Users\\woong\\OneDrive\\\uBB38\uC11C\\GitHub\\TDGameServer\\TDGameServer\\Models\\ResetPasswordRequest.cs",
-              "RelativeToolTip": "TDGameServer\\Models\\ResetPasswordRequest.cs",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAAA0AAAAFAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2025-07-29T17:09:22.499Z"
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 5,
-              "Title": "RequestData.cs",
-              "DocumentMoniker": "C:\\Users\\woong\\OneDrive\\\uBB38\uC11C\\GitHub\\TDGameServer\\TDGameServer\\RequestData.cs",
-              "RelativeDocumentMoniker": "TDGameServer\\RequestData.cs",
-              "ToolTip": "C:\\Users\\woong\\OneDrive\\\uBB38\uC11C\\GitHub\\TDGameServer\\TDGameServer\\RequestData.cs",
-              "RelativeToolTip": "TDGameServer\\RequestData.cs",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAAA0AAAAWAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2025-07-29T17:02:16.883Z"
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 0,
-              "Title": "appsettings.json",
-              "DocumentMoniker": "C:\\Users\\woong\\OneDrive\\\uBB38\uC11C\\GitHub\\TDGameServer\\TDGameServer\\appsettings.json",
-              "RelativeDocumentMoniker": "TDGameServer\\appsettings.json",
-              "ToolTip": "C:\\Users\\woong\\OneDrive\\\uBB38\uC11C\\GitHub\\TDGameServer\\TDGameServer\\appsettings.json",
-              "RelativeToolTip": "TDGameServer\\appsettings.json",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAcAAAABAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001642|",
-              "WhenOpened": "2025-07-30T02:18:04.692Z",
-              "EditorCaption": ""
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 2,
+              "DocumentIndex": 8,
               "Title": "ChangePasswordRequest.cs",
               "DocumentMoniker": "C:\\Users\\woong\\OneDrive\\\uBB38\uC11C\\GitHub\\TDGameServer\\TDGameServer\\Models\\ChangePasswordRequest.cs",
               "RelativeDocumentMoniker": "TDGameServer\\Models\\ChangePasswordRequest.cs",
@@ -156,23 +104,12 @@
               "RelativeToolTip": "TDGameServer\\Models\\ChangePasswordRequest.cs",
               "ViewState": "AgIAAAAAAAAAAAAAAAAAAAwAAAAyAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2025-07-30T11:44:19.787Z"
+              "WhenOpened": "2025-07-30T11:44:19.787Z",
+              "EditorCaption": ""
             },
             {
               "$type": "Document",
-              "DocumentIndex": 8,
-              "Title": "FindEmailRequest.cs",
-              "DocumentMoniker": "C:\\Users\\woong\\OneDrive\\\uBB38\uC11C\\GitHub\\TDGameServer\\TDGameServer\\Models\\FindEmailRequest.cs",
-              "RelativeDocumentMoniker": "TDGameServer\\Models\\FindEmailRequest.cs",
-              "ToolTip": "C:\\Users\\woong\\OneDrive\\\uBB38\uC11C\\GitHub\\TDGameServer\\TDGameServer\\Models\\FindEmailRequest.cs",
-              "RelativeToolTip": "TDGameServer\\Models\\FindEmailRequest.cs",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAsAAAA1AAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2025-07-29T17:08:20.087Z"
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 9,
+              "DocumentIndex": 7,
               "Title": "ChatRequest.cs",
               "DocumentMoniker": "C:\\Users\\woong\\OneDrive\\\uBB38\uC11C\\GitHub\\TDGameServer\\TDGameServer\\Models\\ChatRequest.cs",
               "RelativeDocumentMoniker": "TDGameServer\\Models\\ChatRequest.cs",
@@ -180,11 +117,12 @@
               "RelativeToolTip": "TDGameServer\\Models\\ChatRequest.cs",
               "ViewState": "AgIAAAAAAAAAAAAAAAAAAAsAAAAYAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2025-07-29T22:35:09.176Z"
+              "WhenOpened": "2025-07-29T22:35:09.176Z",
+              "EditorCaption": ""
             },
             {
               "$type": "Document",
-              "DocumentIndex": 10,
+              "DocumentIndex": 5,
               "Title": "LogoutRequest.cs",
               "DocumentMoniker": "C:\\Users\\woong\\OneDrive\\\uBB38\uC11C\\GitHub\\TDGameServer\\TDGameServer\\Models\\LogoutRequest.cs",
               "RelativeDocumentMoniker": "TDGameServer\\Models\\LogoutRequest.cs",
@@ -192,11 +130,116 @@
               "RelativeToolTip": "TDGameServer\\Models\\LogoutRequest.cs",
               "ViewState": "AgIAAAAAAAAAAAAAAAAAAA4AAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2025-07-29T20:46:33.928Z"
+              "WhenOpened": "2025-07-29T20:46:33.928Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 10,
+              "Title": "SystemChatRequest.cs",
+              "DocumentMoniker": "C:\\Users\\woong\\OneDrive\\\uBB38\uC11C\\GitHub\\TDGameServer\\TDGameServer\\Models\\SystemChatRequest.cs",
+              "RelativeDocumentMoniker": "TDGameServer\\Models\\SystemChatRequest.cs",
+              "ToolTip": "C:\\Users\\woong\\OneDrive\\\uBB38\uC11C\\GitHub\\TDGameServer\\TDGameServer\\Models\\SystemChatRequest.cs",
+              "RelativeToolTip": "TDGameServer\\Models\\SystemChatRequest.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAsAAAAzAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-07-31T13:29:30.922Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 12,
+              "Title": "RegisterRequest.cs",
+              "DocumentMoniker": "C:\\Users\\woong\\OneDrive\\\uBB38\uC11C\\GitHub\\TDGameServer\\TDGameServer\\Models\\RegisterRequest.cs",
+              "RelativeDocumentMoniker": "TDGameServer\\Models\\RegisterRequest.cs",
+              "ToolTip": "C:\\Users\\woong\\OneDrive\\\uBB38\uC11C\\GitHub\\TDGameServer\\TDGameServer\\Models\\RegisterRequest.cs",
+              "RelativeToolTip": "TDGameServer\\Models\\RegisterRequest.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAA4AAAAFAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-07-29T17:07:11.566Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 6,
+              "Title": "FindEmailRequest.cs",
+              "DocumentMoniker": "C:\\Users\\woong\\OneDrive\\\uBB38\uC11C\\GitHub\\TDGameServer\\TDGameServer\\Models\\FindEmailRequest.cs",
+              "RelativeDocumentMoniker": "TDGameServer\\Models\\FindEmailRequest.cs",
+              "ToolTip": "C:\\Users\\woong\\OneDrive\\\uBB38\uC11C\\GitHub\\TDGameServer\\TDGameServer\\Models\\FindEmailRequest.cs",
+              "RelativeToolTip": "TDGameServer\\Models\\FindEmailRequest.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAsAAAA1AAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-07-29T17:08:20.087Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 4,
+              "Title": "LobbyEnterRequest.cs",
+              "DocumentMoniker": "C:\\Users\\woong\\OneDrive\\\uBB38\uC11C\\GitHub\\TDGameServer\\TDGameServer\\Models\\LobbyEnterRequest.cs",
+              "RelativeDocumentMoniker": "TDGameServer\\Models\\LobbyEnterRequest.cs",
+              "ToolTip": "C:\\Users\\woong\\OneDrive\\\uBB38\uC11C\\GitHub\\TDGameServer\\TDGameServer\\Models\\LobbyEnterRequest.cs",
+              "RelativeToolTip": "TDGameServer\\Models\\LobbyEnterRequest.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAA0AAAAFAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-07-29T20:17:39.667Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 3,
+              "Title": "LoginRequest.cs",
+              "DocumentMoniker": "C:\\Users\\woong\\OneDrive\\\uBB38\uC11C\\GitHub\\TDGameServer\\TDGameServer\\Models\\LoginRequest.cs",
+              "RelativeDocumentMoniker": "TDGameServer\\Models\\LoginRequest.cs",
+              "ToolTip": "C:\\Users\\woong\\OneDrive\\\uBB38\uC11C\\GitHub\\TDGameServer\\TDGameServer\\Models\\LoginRequest.cs",
+              "RelativeToolTip": "TDGameServer\\Models\\LoginRequest.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAwAAAA1AAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-07-29T17:07:41.212Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 2,
+              "Title": "RequestData.cs",
+              "DocumentMoniker": "C:\\Users\\woong\\OneDrive\\\uBB38\uC11C\\GitHub\\TDGameServer\\TDGameServer\\RequestData.cs",
+              "RelativeDocumentMoniker": "TDGameServer\\RequestData.cs",
+              "ToolTip": "C:\\Users\\woong\\OneDrive\\\uBB38\uC11C\\GitHub\\TDGameServer\\TDGameServer\\RequestData.cs",
+              "RelativeToolTip": "TDGameServer\\RequestData.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAA0AAAAWAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-07-29T17:02:16.883Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 9,
+              "Title": "appsettings.json",
+              "DocumentMoniker": "C:\\Users\\woong\\OneDrive\\\uBB38\uC11C\\GitHub\\TDGameServer\\TDGameServer\\appsettings.json",
+              "RelativeDocumentMoniker": "TDGameServer\\appsettings.json",
+              "ToolTip": "C:\\Users\\woong\\OneDrive\\\uBB38\uC11C\\GitHub\\TDGameServer\\TDGameServer\\appsettings.json",
+              "RelativeToolTip": "TDGameServer\\appsettings.json",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAIAAAAFAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001642|",
+              "WhenOpened": "2025-07-30T02:18:04.692Z",
+              "EditorCaption": ""
             },
             {
               "$type": "Document",
               "DocumentIndex": 11,
+              "Title": "ResetPasswordRequest.cs",
+              "DocumentMoniker": "C:\\Users\\woong\\OneDrive\\\uBB38\uC11C\\GitHub\\TDGameServer\\TDGameServer\\Models\\ResetPasswordRequest.cs",
+              "RelativeDocumentMoniker": "TDGameServer\\Models\\ResetPasswordRequest.cs",
+              "ToolTip": "C:\\Users\\woong\\OneDrive\\\uBB38\uC11C\\GitHub\\TDGameServer\\TDGameServer\\Models\\ResetPasswordRequest.cs",
+              "RelativeToolTip": "TDGameServer\\Models\\ResetPasswordRequest.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAA0AAAAFAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-07-29T17:09:22.499Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 13,
               "Title": "TDGameServer.csproj",
               "DocumentMoniker": "C:\\Users\\woong\\OneDrive\\\uBB38\uC11C\\GitHub\\TDGameServer\\TDGameServer\\TDGameServer.csproj",
               "RelativeDocumentMoniker": "TDGameServer\\TDGameServer.csproj",
