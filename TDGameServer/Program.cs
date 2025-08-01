@@ -9,6 +9,7 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using TDGameServer.Helpers;
 using TDGameServer.Models;
+using static System.Runtime.InteropServices.JavaScript.JSType;
 
 class Program
 {
@@ -73,7 +74,8 @@ class Program
                 if (bytesRead == 0) break;
 
                 string request = Encoding.UTF8.GetString(buffer, 0, bytesRead);
-                Console.WriteLine("요청 수신: " + request);
+                if(!request.Contains("\"Command\":\"ping\""))
+                    Console.WriteLine("요청 수신: " + request);
 
                 string response = HandleRequest(request, client);
                 byte[] respBytes = Encoding.UTF8.GetBytes(response);
@@ -208,21 +210,70 @@ class Program
                 case "ping":
                     return JsonSerializer.Serialize(new { Command = "pong" }) + "\n";
 
+                case "change-title":
+                    var changeTitleData = JsonSerializer.Deserialize<ChangeTitleRequest>(jsonRequest);
+                    return changeTitleData != null
+                        ? ChangeUserTitle(changeTitleData)
+                        : JsonSerializer.Serialize(new { Command = "error", Message = "요청 파싱 실패" });
+
                 case "chat":
-                    var chatData = JsonSerializer.Deserialize<ChatRequest>(jsonRequest);
-                    if (chatData != null)
                     {
-                        string chatMsg = chatData.Message;
-                        string jsonMsg = JsonSerializer.Serialize(new
+                        var chatData = JsonSerializer.Deserialize<ChatRequest>(jsonRequest);
+                        if (chatData != null)
                         {
-                            Command = "chat",
-                            Sender = chatData.Username,
-                            Message = chatMsg
-                        });
-                        BroadcastMessage(jsonMsg);
-                        return JsonSerializer.Serialize(new { Command = "chat-ok" });
+                            string chatMsg = chatData.Message;
+                            string chatType = chatData.ChatType ?? "All";
+                            string targetUser = chatData.TargetUsername ?? string.Empty;
+
+                            // 유저 Title 가져오기
+                            string titleName = "";
+                            string gradient = "#FFFFFF"; // 기본 흰색
+                            using (var conn = new MySqlConnection(connectionString))
+                            {
+                                conn.Open();
+                                var cmd = new MySqlCommand(@"
+                                SELECT t.TitleName, t.ColorGradient
+                                FROM Users u
+                                LEFT JOIN Titles t ON u.TitleId = t.TitleId
+                                WHERE u.Id=@uid", conn);
+                                cmd.Parameters.AddWithValue("@uid", chatData.UserId);
+                                using var reader = cmd.ExecuteReader();
+                                if (reader.Read())
+                                {
+                                    titleName = reader.IsDBNull(0) ? "" : reader.GetString(0);
+                                    gradient = reader.IsDBNull(1) ? "#FFFFFF" : reader.GetString(1);
+                                }
+                            }
+
+                            var jsonMsg = JsonSerializer.Serialize(new
+                            {
+                                Command = "chat",
+                                Sender = chatData.Username,
+                                Message = chatMsg,
+                                ChatType = chatType,
+                                Target = targetUser,
+                                TitleName = titleName,
+                                ColorGradient = gradient
+                            });
+
+                            // 채팅타입별 브로드캐스트
+                            if (chatType.Equals("All", StringComparison.OrdinalIgnoreCase))
+                            {
+                                BroadcastMessage(jsonMsg); // 로비 전체
+                            }
+                            else if (chatType.Equals("Room", StringComparison.OrdinalIgnoreCase))
+                            {
+                                BroadcastMessageToRoom(chatData.UserId, jsonMsg); // 같은 방만
+                            }
+                            else if (chatType.Equals("Whisper", StringComparison.OrdinalIgnoreCase) && targetUser != null)
+                            {
+                                SendWhisper(chatData.UserId, targetUser, jsonMsg);
+                            }
+                            return JsonSerializer.Serialize(new { Command = "chat-ok" });
+                        }
+                        return JsonSerializer.Serialize(new { Command = "error", Message = "요청 파싱 실패" });
                     }
-                    return JsonSerializer.Serialize(new { Command = "error", Message = "요청 파싱 실패" });
+
 
                 case "system-chat":
                     var systemChatData = JsonSerializer.Deserialize<SystemChatRequest>(jsonRequest);
@@ -273,33 +324,67 @@ class Program
                     {
                         string roomName = doc.RootElement.GetProperty("RoomName").GetString() ?? "";
                         int hostId = doc.RootElement.GetProperty("HostId").GetInt32();
-                        string hostName = doc.RootElement.GetProperty("Host").GetString() ?? "";
-                        string difficulty = doc.RootElement.GetProperty("Difficulty").GetString() ?? "Normal";
+                        string difficulty = doc.RootElement.GetProperty("Difficulty").GetString() ?? "Easy";
 
                         using var conn = new MySqlConnection(connectionString);
                         conn.Open();
 
-                        // 방 생성
-                        var cmd = new MySqlCommand(@"INSERT INTO Rooms (RoomName, HostId, Host, Difficulty) 
-                             VALUES (@name,@hid,@hname,@diff); SELECT LAST_INSERT_ID();", conn);
+                        // 0) Host의 ColorGradient 가져오기
+                        string hostName = "";
+                        string colorGradient = "#000000";
+                        var cmdHost = new MySqlCommand(@"
+                            SELECT u.Username, COALESCE(t.ColorGradient, '#000000')
+                            FROM Users u
+                            LEFT JOIN Titles t ON u.TitleId = t.TitleId
+                            WHERE u.Id=@hid;", conn);
+                        cmdHost.Parameters.AddWithValue("@hid", hostId);
+
+                        using (var reader = cmdHost.ExecuteReader())
+                        {
+                            if (reader.Read())
+                            {
+                                hostName = reader.GetString(0);
+                                colorGradient = reader.GetString(1);
+                            }
+                        }
+
+                        // 1) 방 생성
+                        var cmd = new MySqlCommand(@"
+                                                    INSERT INTO Rooms (RoomName, HostId, Host, Difficulty) 
+                                                    VALUES (@name, @hid, @hname, @diff);
+                                                    SELECT LAST_INSERT_ID();", conn);
                         cmd.Parameters.AddWithValue("@name", roomName);
                         cmd.Parameters.AddWithValue("@hid", hostId);
                         cmd.Parameters.AddWithValue("@hname", hostName);
                         cmd.Parameters.AddWithValue("@diff", difficulty);
                         int roomId = Convert.ToInt32(cmd.ExecuteScalar());
 
-                        // 호스트를 1P에 배치
-                        var cmd2 = new MySqlCommand(@"INSERT INTO RoomPlayers (RoomId, UserId, Username, PlayerSlot, IsHost) 
-                                  VALUES (@rid,@uid,@uname,1,1)", conn);
+                        // 2) 4개 슬롯 미리 생성
+                        var cmd2 = new MySqlCommand(@"
+                                                    INSERT INTO RoomPlayers (RoomId, UserId, Username, PlayerSlot, IsHost, IsClosed)
+                                                    VALUES
+                                                    (@rid, @hid, @hname, 1, 1, 0),
+                                                    (@rid, 0, '', 2, 0, 0),
+                                                    (@rid, 0, '', 3, 0, 0),
+                                                    (@rid, 0, '', 4, 0, 0);", conn);
                         cmd2.Parameters.AddWithValue("@rid", roomId);
-                        cmd2.Parameters.AddWithValue("@uid", hostId);
-                        cmd2.Parameters.AddWithValue("@uname", hostName);
+                        cmd2.Parameters.AddWithValue("@hid", hostId);
+                        cmd2.Parameters.AddWithValue("@hname", hostName);
                         cmd2.ExecuteNonQuery();
 
-                        // 로비 목록 갱신
+                        // 3) 로비 목록 갱신
                         BroadcastRoomList();
-                        return JsonSerializer.Serialize(new { Command = "create-room-result", RoomId = roomId, Message = "방이 생성되었습니다." });
+
+                        return JsonSerializer.Serialize(new
+                        {
+                            Command = "create-room-result",
+                            RoomId = roomId,
+                            Host = hostName,
+                            ColorGradient = colorGradient,
+                            Message = "방이 생성되었습니다."
+                        });
                     }
+
 
                 case "join-room":
                     {
@@ -318,22 +403,30 @@ class Program
 
                         if (exists == 0)
                         {
-                            // 빈 슬롯 찾기 (1~4 중 비어있는 슬롯)
-                            var slotCmd = new MySqlCommand(@"SELECT s FROM (SELECT 1 as s UNION SELECT 2 UNION SELECT 3 UNION SELECT 4) a
-                                                            WHERE s NOT IN (SELECT PlayerSlot FROM RoomPlayers WHERE RoomId=@rid)", conn);
+                            // 빈 슬롯(열린 슬롯) 찾기
+                            var slotCmd = new MySqlCommand(@"SELECT PlayerSlot FROM RoomPlayers 
+                                                             WHERE RoomId=@rid AND UserId=0 AND IsClosed=0 
+                                                             ORDER BY PlayerSlot LIMIT 1", conn);
                             slotCmd.Parameters.AddWithValue("@rid", roomId);
                             var slot = slotCmd.ExecuteScalar();
-                            int playerSlot = slot != null ? Convert.ToInt32(slot) : 0;
 
-                            if (playerSlot > 0)
+                            if (slot != null)
                             {
-                                var cmd = new MySqlCommand(@"INSERT INTO RoomPlayers (RoomId, UserId, Username, PlayerSlot, IsHost)
-                                         VALUES (@rid,@uid,@uname,@slot,0)", conn);
+                                int playerSlot = Convert.ToInt32(slot);
+
+                                // 슬롯 점유 처리
+                                var cmd = new MySqlCommand(@"UPDATE RoomPlayers 
+                                         SET UserId=@uid, Username=@uname 
+                                         WHERE RoomId=@rid AND PlayerSlot=@slot", conn);
                                 cmd.Parameters.AddWithValue("@rid", roomId);
                                 cmd.Parameters.AddWithValue("@uid", userId);
                                 cmd.Parameters.AddWithValue("@uname", username);
                                 cmd.Parameters.AddWithValue("@slot", playerSlot);
                                 cmd.ExecuteNonQuery();
+                            }
+                            else
+                            {
+                                return JsonSerializer.Serialize(new { Command = "join-room-result", Message = "빈 슬롯이 없습니다." });
                             }
                         }
 
@@ -343,7 +436,6 @@ class Program
                         return JsonSerializer.Serialize(new { Command = "join-room-result", Message = "방에 입장했습니다." });
                     }
 
-
                 case "kick-player":
                     {
                         int roomId = doc.RootElement.GetProperty("RoomId").GetInt32();
@@ -352,7 +444,11 @@ class Program
                         using var conn = new MySqlConnection(connectionString);
                         conn.Open();
 
-                        var cmd = new MySqlCommand("DELETE FROM RoomPlayers WHERE RoomId=@rid AND UserId=@uid", conn);
+                        // 대상 슬롯을 빈 상태로 초기화
+                        var cmd = new MySqlCommand(@"
+                                                    UPDATE RoomPlayers
+                                                    SET UserId = 0, Username = 'Open', IsHost = 0, IsClosed = 0
+                                                    WHERE RoomId=@rid AND UserId=@uid", conn);
                         cmd.Parameters.AddWithValue("@rid", roomId);
                         cmd.Parameters.AddWithValue("@uid", targetUserId);
                         cmd.ExecuteNonQuery();
@@ -361,17 +457,22 @@ class Program
                         return JsonSerializer.Serialize(new { Command = "kick-result", Message = "플레이어를 강퇴했습니다." });
                     }
 
+
                 case "move-slot":
                     {
                         int roomId = doc.RootElement.GetProperty("RoomId").GetInt32();
                         int fromSlot = doc.RootElement.GetProperty("FromSlot").GetInt32();
                         int toSlot = doc.RootElement.GetProperty("ToSlot").GetInt32();
 
+                        if (fromSlot == toSlot)
+                            return JsonSerializer.Serialize(new { Command = "move-slot-result", Message = "같은 슬롯으로는 이동할 수 없습니다." });
+
                         using var conn = new MySqlConnection(connectionString);
                         conn.Open();
 
                         // 이동할 플레이어 정보
-                        var getPlayerCmd = new MySqlCommand("SELECT UserId, IsHost FROM RoomPlayers WHERE RoomId=@rid AND PlayerSlot=@from", conn);
+                        var getPlayerCmd = new MySqlCommand(
+                            "SELECT UserId, IsHost FROM RoomPlayers WHERE RoomId=@rid AND PlayerSlot=@from", conn);
                         getPlayerCmd.Parameters.AddWithValue("@rid", roomId);
                         getPlayerCmd.Parameters.AddWithValue("@from", fromSlot);
                         using var reader = getPlayerCmd.ExecuteReader();
@@ -383,70 +484,79 @@ class Program
                         bool isHost = reader.GetBoolean("IsHost");
                         reader.Close();
 
+                        // ---------------- 비호스트 처리 ----------------
                         if (!isHost)
                         {
-                            // Host가 아닐 때는 빈 자리만 찾아 이동
-                            int[] slotOrder = new int[] { toSlot, (toSlot % 4) + 1, ((toSlot + 1) % 4) + 1 };
-                            int availableSlot = -1;
+                            // 대상 슬롯 상태 확인
+                            var checkSlot = new MySqlCommand(
+                                "SELECT UserId, IsClosed FROM RoomPlayers WHERE RoomId=@rid AND PlayerSlot=@slot", conn);
+                            checkSlot.Parameters.AddWithValue("@rid", roomId);
+                            checkSlot.Parameters.AddWithValue("@slot", toSlot);
+                            using var slotReader = checkSlot.ExecuteReader();
 
-                            foreach (var slot in slotOrder)
-                            {
-                                var checkCmd = new MySqlCommand("SELECT COUNT(*) FROM RoomPlayers WHERE RoomId=@rid AND PlayerSlot=@slot AND UserId<>0 AND IsClosed=0", conn);
-                                checkCmd.Parameters.AddWithValue("@rid", roomId);
-                                checkCmd.Parameters.AddWithValue("@slot", slot);
-                                int occupied = Convert.ToInt32(checkCmd.ExecuteScalar());
+                            if (!slotReader.Read())
+                                return JsonSerializer.Serialize(new { Command = "move-slot-result", Message = "대상 슬롯을 찾을 수 없습니다." });
 
-                                var closedCmd = new MySqlCommand("SELECT COUNT(*) FROM RoomPlayers WHERE RoomId=@rid AND PlayerSlot=@slot AND IsClosed=1", conn);
-                                closedCmd.Parameters.AddWithValue("@rid", roomId);
-                                closedCmd.Parameters.AddWithValue("@slot", slot);
-                                int closed = Convert.ToInt32(closedCmd.ExecuteScalar());
+                            int destUserId = slotReader.GetInt32("UserId");
+                            bool destClosed = slotReader.GetBoolean("IsClosed");
+                            slotReader.Close();
 
-                                if (occupied == 0 && closed == 0)
-                                {
-                                    availableSlot = slot;
-                                    break;
-                                }
-                            }
+                            if (destUserId != 0 || destClosed)
+                                return JsonSerializer.Serialize(new { Command = "move-slot-result", Message = "대상 슬롯이 사용 중이거나 닫혀 있습니다." });
 
-                            if (availableSlot == -1)
-                            {
-                                return JsonSerializer.Serialize(new { Command = "move-slot-result", Message = "이동할 빈 슬롯이 없습니다." });
-                            }
-
-                            // 슬롯 이동
-                            var delCmd = new MySqlCommand("DELETE FROM RoomPlayers WHERE RoomId=@rid AND PlayerSlot=@slot", conn);
-                            delCmd.Parameters.AddWithValue("@rid", roomId);
-                            delCmd.Parameters.AddWithValue("@slot", availableSlot);
-                            delCmd.ExecuteNonQuery();
-
-                            var updateCmd = new MySqlCommand("UPDATE RoomPlayers SET PlayerSlot=@to WHERE RoomId=@rid AND PlayerSlot=@from", conn);
-                            updateCmd.Parameters.AddWithValue("@rid", roomId);
-                            updateCmd.Parameters.AddWithValue("@from", fromSlot);
-                            updateCmd.Parameters.AddWithValue("@to", availableSlot);
-                            updateCmd.ExecuteNonQuery();
-
-                            BroadcastRoomUpdate(roomId);
-                            return JsonSerializer.Serialize(new { Command = "move-slot-result", Message = $"{fromSlot}P → {availableSlot}P로 이동 완료" });
-                        }
-                        else
-                        {
-                            // Host는 강제 자리 바꿈 가능
-                            var swapCmd = new MySqlCommand("UPDATE RoomPlayers SET PlayerSlot=0 WHERE RoomId=@rid AND PlayerSlot=@to", conn);
-                            swapCmd.Parameters.AddWithValue("@rid", roomId);
-                            swapCmd.Parameters.AddWithValue("@to", toSlot);
-                            swapCmd.ExecuteNonQuery();
-
-                            var updateCmd = new MySqlCommand("UPDATE RoomPlayers SET PlayerSlot=@to WHERE RoomId=@rid AND PlayerSlot=@from", conn);
+                            // 빈 슬롯으로 이동
+                            var updateCmd = new MySqlCommand(
+                                @"UPDATE RoomPlayers SET PlayerSlot=@to 
+                                WHERE RoomId=@rid AND PlayerSlot=@from AND UserId=@uid", conn);
                             updateCmd.Parameters.AddWithValue("@rid", roomId);
                             updateCmd.Parameters.AddWithValue("@from", fromSlot);
                             updateCmd.Parameters.AddWithValue("@to", toSlot);
+                            updateCmd.Parameters.AddWithValue("@uid", targetUserId);
                             updateCmd.ExecuteNonQuery();
 
                             BroadcastRoomUpdate(roomId);
-                            return JsonSerializer.Serialize(new { Command = "move-slot-result", Message = $"(호스트) {fromSlot}P → {toSlot}P 강제 이동 완료" });
+                            return JsonSerializer.Serialize(new { Command = "move-slot-result", Message = $"{fromSlot}P → {toSlot}P로 이동 완료" });
+                        }
+                        else
+                        {
+                            // ---------------- 호스트 자리 강제 교환 처리 ----------------
+                            using var transaction = conn.BeginTransaction();
+
+                            try
+                            {
+                                // 1) 대상 슬롯을 임시 슬롯(99)로 이동
+                                var cmd1 = new MySqlCommand(
+                                    "UPDATE RoomPlayers SET PlayerSlot=99 WHERE RoomId=@rid AND PlayerSlot=@slot", conn, transaction);
+                                cmd1.Parameters.AddWithValue("@rid", roomId);
+                                cmd1.Parameters.AddWithValue("@slot", toSlot);
+                                cmd1.ExecuteNonQuery();
+
+                                // 2) fromSlot → toSlot
+                                var cmd2 = new MySqlCommand(
+                                    "UPDATE RoomPlayers SET PlayerSlot=@to WHERE RoomId=@rid AND PlayerSlot=@from", conn, transaction);
+                                cmd2.Parameters.AddWithValue("@rid", roomId);
+                                cmd2.Parameters.AddWithValue("@from", fromSlot);
+                                cmd2.Parameters.AddWithValue("@to", toSlot);
+                                cmd2.ExecuteNonQuery();
+
+                                // 3) 99 → fromSlot
+                                var cmd3 = new MySqlCommand(
+                                    "UPDATE RoomPlayers SET PlayerSlot=@from WHERE RoomId=@rid AND PlayerSlot=99", conn, transaction);
+                                cmd3.Parameters.AddWithValue("@rid", roomId);
+                                cmd3.Parameters.AddWithValue("@from", fromSlot);
+                                cmd3.ExecuteNonQuery();
+
+                                transaction.Commit();
+                                BroadcastRoomUpdate(roomId);
+                                return JsonSerializer.Serialize(new { Command = "move-slot-result", Message = $"(호스트) {fromSlot}P ↔ {toSlot}P 자리 교환 완료" });
+                            }
+                            catch (Exception ex)
+                            {
+                                transaction.Rollback();
+                                return JsonSerializer.Serialize(new { Command = "move-slot-result", Message = $"자리 이동 중 오류: {ex.Message}" });
+                            }
                         }
                     }
-
 
                 case "change-host":
                     {
@@ -493,19 +603,19 @@ class Program
                         using var conn = new MySqlConnection(connectionString);
                         conn.Open();
 
-                        // IsClosed 해제 (열린 슬롯 표시)
-                        var cmd = new MySqlCommand(@"INSERT INTO RoomPlayers (RoomId, UserId, Username, PlayerSlot, IsClosed)
-                                 VALUES (@rid, 0, 'Open', @slot, 0)
-                                 ON DUPLICATE KEY UPDATE IsClosed=0, Username='Open', UserId=0", conn);
+                        // IsClosed 해제
+                        var cmd = new MySqlCommand(@"
+                                                    UPDATE RoomPlayers 
+                                                    SET IsClosed=0, Username='Open', UserId=0
+                                                    WHERE RoomId=@rid AND PlayerSlot=@slot;", conn);
                         cmd.Parameters.AddWithValue("@rid", roomId);
                         cmd.Parameters.AddWithValue("@slot", slot);
                         cmd.ExecuteNonQuery();
 
                         BroadcastRoomUpdate(roomId);
-                        // 로비 목록 갱신
                         BroadcastRoomList();
 
-                        return JsonSerializer.Serialize(new { Command = "open-slot-result", Message = "슬롯을 오픈했습니다." });
+                        return JsonSerializer.Serialize(new { Command = "open-slot-result", Message = "슬롯을 열었습니다." });
                     }
 
                 case "close-slot":
@@ -516,22 +626,15 @@ class Program
                         using var conn = new MySqlConnection(connectionString);
                         conn.Open();
 
-                        // 해당 슬롯에 플레이어가 있으면 강퇴
-                        var delCmd = new MySqlCommand("DELETE FROM RoomPlayers WHERE RoomId=@rid AND PlayerSlot=@slot AND UserId<>0", conn);
-                        delCmd.Parameters.AddWithValue("@rid", roomId);
-                        delCmd.Parameters.AddWithValue("@slot", slot);
-                        delCmd.ExecuteNonQuery();
-
-                        // Close 슬롯 표시
-                        var cmd = new MySqlCommand(@"INSERT INTO RoomPlayers (RoomId, UserId, Username, PlayerSlot, IsClosed)
-                                 VALUES (@rid, 0, 'Close', @slot, 1)
-                                 ON DUPLICATE KEY UPDATE IsClosed=1, Username='Close', UserId=0", conn);
+                        var cmd = new MySqlCommand(@"
+                                                    UPDATE RoomPlayers 
+                                                    SET IsClosed = 1, UserId = 0, Username = 'Close' 
+                                                    WHERE RoomId=@rid AND PlayerSlot=@slot;", conn);
                         cmd.Parameters.AddWithValue("@rid", roomId);
                         cmd.Parameters.AddWithValue("@slot", slot);
                         cmd.ExecuteNonQuery();
 
                         BroadcastRoomUpdate(roomId);
-                        // 로비 목록 갱신
                         BroadcastRoomList();
 
                         return JsonSerializer.Serialize(new { Command = "close-slot-result", Message = "슬롯을 닫았습니다." });
@@ -546,15 +649,17 @@ class Program
                         conn.Open();
 
                         // 현재 유저가 호스트인지 확인
-                        var hostCheckCmd = new MySqlCommand("SELECT IsHost FROM RoomPlayers WHERE RoomId=@rid AND UserId=@uid", conn);
+                        var hostCheckCmd = new MySqlCommand("SELECT IsHost, PlayerSlot FROM RoomPlayers WHERE RoomId=@rid AND UserId=@uid", conn);
                         hostCheckCmd.Parameters.AddWithValue("@rid", roomId);
                         hostCheckCmd.Parameters.AddWithValue("@uid", userId);
-                        var isHostObj = hostCheckCmd.ExecuteScalar();
+                        using var reader = hostCheckCmd.ExecuteReader();
 
-                        if (isHostObj == null)
+                        if (!reader.Read())
                             return JsonSerializer.Serialize(new { Command = "exit-room-result", Message = "해당 플레이어가 방에 없습니다." });
 
-                        bool isHost = Convert.ToBoolean(isHostObj);
+                        bool isHost = reader.GetBoolean("IsHost");
+                        int playerSlot = reader.GetInt32("PlayerSlot");
+                        reader.Close();
 
                         if (isHost)
                         {
@@ -577,24 +682,14 @@ class Program
                         }
                         else
                         {
-                            // 2) 일반 플레이어 나가기
-                            var delPlayerCmd = new MySqlCommand("DELETE FROM RoomPlayers WHERE RoomId=@rid AND UserId=@uid", conn);
-                            delPlayerCmd.Parameters.AddWithValue("@rid", roomId);
-                            delPlayerCmd.Parameters.AddWithValue("@uid", userId);
-                            delPlayerCmd.ExecuteNonQuery();
-
-                            // 자리를 "Open"으로 채움
-                            var maxSlotCmd = new MySqlCommand("SELECT MAX(PlayerSlot)+1 FROM RoomPlayers WHERE RoomId=@rid", conn);
-                            maxSlotCmd.Parameters.AddWithValue("@rid", roomId);
-                            var nextSlot = Convert.ToInt32(maxSlotCmd.ExecuteScalar() ?? 1);
-
-                            // 빈자리 기록
-                            var insertCmd = new MySqlCommand(@"INSERT INTO RoomPlayers(RoomId,UserId,Username,PlayerSlot,IsClosed)
-                                           VALUES(@rid,0,'Open',@slot,0)
-                                           ON DUPLICATE KEY UPDATE UserId=0,Username='Open',IsClosed=0", conn);
-                            insertCmd.Parameters.AddWithValue("@rid", roomId);
-                            insertCmd.Parameters.AddWithValue("@slot", nextSlot);
-                            insertCmd.ExecuteNonQuery();
+                            // 2) 일반 플레이어 나가기 → 슬롯 초기화
+                            var updateCmd = new MySqlCommand(@"
+                                                            UPDATE RoomPlayers
+                                                            SET UserId=0, Username='Open', IsClosed=0
+                                                            WHERE RoomId=@rid AND PlayerSlot=@slot", conn);
+                            updateCmd.Parameters.AddWithValue("@rid", roomId);
+                            updateCmd.Parameters.AddWithValue("@slot", playerSlot);
+                            updateCmd.ExecuteNonQuery();
 
                             // 남은 참가자들에게 방 정보 갱신
                             BroadcastRoomUpdate(roomId);
@@ -604,6 +699,79 @@ class Program
 
                             return JsonSerializer.Serialize(new { Command = "exit-room-result", Message = "방에서 나갔습니다." });
                         }
+                    }
+
+                case "request-room-list":
+                    {
+                        SendRoomListToClient(client);
+                        return JsonSerializer.Serialize(new
+                        {
+                            Command = "request-room-list-result",
+                            Message = "방 목록을 갱신했습니다."
+                        });
+                    }
+
+                case "request-room-info":
+                    {
+                        int roomId = doc.RootElement.GetProperty("RoomId").GetInt32();
+
+                        using var conn = new MySqlConnection(connectionString);
+                        conn.Open();
+
+                        // 1) 방 기본 정보 조회
+                        var cmdRoom = new MySqlCommand("SELECT RoomName, Host, Difficulty FROM Rooms WHERE RoomId=@rid", conn);
+                        cmdRoom.Parameters.AddWithValue("@rid", roomId);
+                        using var reader = cmdRoom.ExecuteReader();
+                        if (!reader.Read())
+                        {
+                            return JsonSerializer.Serialize(new { Command = "room-info", Message = "방을 찾을 수 없습니다." });
+                        }
+
+                        string roomName = reader.GetString("RoomName");
+                        string hostName = reader.GetString("Host");
+                        string difficulty = reader.GetString("Difficulty");
+                        reader.Close();
+
+                        // 2) 플레이어 목록 조회
+                        var cmdPlayers = new MySqlCommand(@"
+                            SELECT rp.PlayerSlot, rp.UserId, rp.Username, rp.IsHost, rp.IsClosed,
+                                   IFNULL(t.TitleId, 0) AS TitleId,
+                                   IFNULL(t.TitleName, '') AS TitleName,
+                                   IFNULL(t.ColorGradient, '#000000') AS ColorGradient
+                            FROM RoomPlayers rp
+                            LEFT JOIN Users u ON rp.UserId = u.Id
+                            LEFT JOIN Titles t ON u.TitleId = t.TitleId
+                            WHERE rp.RoomId=@rid
+                            ORDER BY rp.PlayerSlot", conn);
+                        cmdPlayers.Parameters.AddWithValue("@rid", roomId);
+
+                        var players = new List<object>();
+                        using var reader2 = cmdPlayers.ExecuteReader();
+                        while (reader2.Read())
+                        {
+                            players.Add(new
+                            {
+                                PlayerSlot = reader2.GetInt32("PlayerSlot"),
+                                UserId = reader2.GetInt32("UserId"),
+                                Username = reader2.GetString("Username"),
+                                IsHost = reader2.GetBoolean("IsHost"),
+                                IsClosed = reader2.GetBoolean("IsClosed"),
+                                TitleId = reader2.GetInt32("TitleId"),
+                                TitleName = reader2.GetString("TitleName"),
+                                ColorGradient = reader2.GetString("ColorGradient")
+                            });
+                        }
+
+                        // 3) 클라이언트로 JSON 반환
+                        return JsonSerializer.Serialize(new
+                        {
+                            Command = "room-info",
+                            RoomId = roomId,
+                            RoomName = roomName,
+                            Host = hostName,
+                            Difficulty = difficulty,
+                            Players = players
+                        });
                     }
 
                 default:
@@ -666,7 +834,8 @@ class Program
         using var conn = new MySqlConnection(connectionString);
         conn.Open();
 
-        var cmd = new MySqlCommand("SELECT Id, Username FROM Users WHERE Email=@e AND PasswordHash=@p", conn);
+        // 사용자 정보 조회
+        var cmd = new MySqlCommand("SELECT Id, Username, IFNULL(TitleId, 0) AS TitleId FROM Users WHERE Email=@e AND PasswordHash=@p;", conn);
         cmd.Parameters.AddWithValue("@e", data.Email);
         cmd.Parameters.AddWithValue("@p", hashed);
 
@@ -675,16 +844,37 @@ class Program
         {
             int userId = reader.GetInt32("Id");
             string username = reader.GetString("Username");
+            int titleId = reader.IsDBNull(reader.GetOrdinal("TitleId")) ? 0 : reader.GetInt32("TitleId");
+            reader.Close();
+
+            // 타이틀 변수 미리 선언
+            string titleName = "";
+            string colorGradient = "#FFFFFF";
+
+            // 타이틀Id가 0이 아닐 때 타이틀 조회
+            if (titleId > 0)
+            {
+                var cmdTitle = new MySqlCommand("SELECT TitleName, ColorGradient FROM Titles WHERE TitleId=@tid", conn);
+                cmdTitle.Parameters.AddWithValue("@tid", titleId);
+                using var titleReader = cmdTitle.ExecuteReader();
+                if (titleReader.Read())
+                {
+                    titleName = titleReader.GetString("TitleName");
+                    colorGradient = titleReader.GetString("ColorGradient");
+                }
+            }
 
             // JSON으로 응답
             return JsonSerializer.Serialize(new
             {
                 Command = "login-success",
                 UserId = userId,
-                Username = username
+                Username = username,
+                TitleId = titleId,
+                TitleName = titleName ?? "",
+                ColorGradient = colorGradient ?? "#FFFFFF"
             });
         }
-
         return JsonSerializer.Serialize(new { Command = "error", Message = "이메일 또는 비밀번호가 잘못되었습니다." });
     }
 
@@ -824,6 +1014,58 @@ class Program
         });
     }
 
+    // ---------------- 칭호 변경 ----------------
+    private static string ChangeUserTitle(ChangeTitleRequest data)
+    {
+        try
+        {
+            using var conn = new MySqlConnection(connectionString);
+            conn.Open();
+
+            // 1. 칭호 정보 조회
+            var titleCmd = new MySqlCommand("SELECT TitleName, ColorGradient FROM Titles WHERE TitleId=@titleId", conn);
+            titleCmd.Parameters.AddWithValue("@titleId", data.TitleId);
+            using var reader = titleCmd.ExecuteReader();
+
+            if (!reader.Read())
+            {
+                return JsonSerializer.Serialize(new { Command = "error", Message = "존재하지 않는 칭호입니다." });
+            }
+
+            string titleName = reader.GetString("TitleName");
+            string colorGradient = reader.GetString("ColorGradient");
+            reader.Close();
+
+            // 2. 유저 칭호 업데이트
+            var updateCmd = new MySqlCommand("UPDATE Users SET TitleId=@titleId WHERE Id=@Id", conn);
+            updateCmd.Parameters.AddWithValue("@titleId", data.TitleId);
+            updateCmd.Parameters.AddWithValue("@Id", data.UserId);
+            updateCmd.ExecuteNonQuery();
+
+            // 3. 세션이 존재하면 실시간 전송
+            if (sessions.TryGetValue(data.UserId, out var session))
+            {
+                string json = JsonSerializer.Serialize(new
+                {
+                    Command = "title-update",
+                    data.TitleId,
+                    TitleName = titleName,
+                    ColorGradient = colorGradient
+                });
+                SendMessage(session.Client, json);
+            }
+
+            // 4. 요청자에게 결과 응답
+            return JsonSerializer.Serialize(new { Command = "change-title-result", Message = "칭호가 변경되었습니다." });
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"칭호 변경 오류: {ex.Message}");
+            return JsonSerializer.Serialize(new { Command = "error", Message = "칭호 변경 중 오류가 발생했습니다." });
+        }
+    }
+
+
     // ---------------- 세션 모니터링 ----------------
     private static void MonitorSessions()
     {
@@ -835,11 +1077,13 @@ class Program
                 {
                     if (s.Client == null || !IsClientConnected(s.Client))
                     {
-                        sessions.TryRemove(s.UserId, out _);
+                        RemoveUserAndRoom(s.UserId);                                    // 세션 제거
+
+                        sessions.TryRemove(s.UserId, out _);                            // 세션 딕셔너리에서 제거
                         Console.WriteLine($"연결 끊김 감지 → 세션 제거: {s.UserId}");
                     }
                 }
-                Thread.Sleep(5000); // 5초마다 체크
+                Thread.Sleep(5000);                                                     // 5초마다 체크
             }
         }).Start();
     }
@@ -854,6 +1098,22 @@ class Program
         catch
         {
             return false;
+        }
+    }
+
+    private static void SendMessageToClient(Session session, string message)
+    {
+        try
+        {
+            if (session.Client != null && session.Client.Connected)
+            {
+                byte[] buffer = Encoding.UTF8.GetBytes(message + "\n");
+                session.Client.GetStream().Write(buffer, 0, buffer.Length);
+            }
+        }
+        catch
+        {
+            Console.WriteLine($"[SendMessageToClient] UserId {session.UserId} 전송 실패");
         }
     }
 
@@ -877,13 +1137,134 @@ class Program
         }
     }
 
+    /// <summary>
+    /// 특정 방에 속한 모든 플레이어에게 메시지를 브로드캐스트합니다.
+    /// </summary>
+    /// <param name="senderUserId">메시지 보낸 사람의 UserId</param>
+    /// <param name="jsonMsg">전송할 JSON 메시지</param>
+    private static void BroadcastMessageToRoom(int senderUserId, string jsonMsg)
+    {
+        try
+        {
+            int roomId = 0;
+
+            // UserId가 속한 방 찾기
+            using (var conn = new MySqlConnection(connectionString))
+            {
+                conn.Open();
+                var cmd = new MySqlCommand("SELECT RoomId FROM RoomPlayers WHERE UserId=@uid LIMIT 1", conn);
+                cmd.Parameters.AddWithValue("@uid", senderUserId);
+                var result = cmd.ExecuteScalar();
+                if (result != null)
+                    roomId = Convert.ToInt32(result);
+            }
+
+            if (roomId == 0)
+            {
+                Console.WriteLine($"[BroadcastMessageToRoom] UserId {senderUserId}가 속한 방을 찾을 수 없음");
+                return;
+            }
+
+            // 같은 방 유저들에게 메시지 전송
+            using (var conn = new MySqlConnection(connectionString))
+            {
+                conn.Open();
+                var cmd = new MySqlCommand("SELECT UserId FROM RoomPlayers WHERE RoomId=@rid AND UserId <> 0", conn);
+                cmd.Parameters.AddWithValue("@rid", roomId);
+
+                using var reader = cmd.ExecuteReader();
+                while (reader.Read())
+                {
+                    int targetUserId = reader.GetInt32("UserId");
+
+                    if (sessions.TryGetValue(targetUserId, out Session? targetSession) && targetSession != null)
+                    {
+                        SendMessageToClient(targetSession, jsonMsg);
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[BroadcastMessageToRoom 오류] {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// 귓속말을 대상 사용자와 발신자에게만 보냅니다.
+    /// </summary>
+    /// <param name="senderUserId">발신자 UserId</param>
+    /// <param name="targetUsername">수신자 Username</param>
+    /// <param name="jsonMsg">전송할 JSON 메시지</param>
+    private static void SendWhisper(int senderUserId, string targetUsername, string jsonMsg)
+    {
+        try
+        {
+            int targetUserId = 0;
+
+            // 대상 Username → UserId 조회
+            using (var conn = new MySqlConnection(connectionString))
+            {
+                conn.Open();
+                var cmd = new MySqlCommand("SELECT Id FROM Users WHERE Username=@uname LIMIT 1", conn);
+                cmd.Parameters.AddWithValue("@uname", targetUsername);
+                var result = cmd.ExecuteScalar();
+                if (result != null)
+                    targetUserId = Convert.ToInt32(result);
+            }
+
+            if (targetUserId == 0)
+            {
+                Console.WriteLine($"[SendWhisper] 대상 사용자 '{targetUsername}'를 찾을 수 없음");
+                return;
+            }
+
+            // 발신자와 수신자에게만 메시지 전송
+            int[] targetIds = { senderUserId, targetUserId };
+
+            foreach (int uid in targetIds)
+            {
+                if (sessions.TryGetValue(uid, out Session? targetSession) && targetSession != null)
+                {
+                    SendMessageToClient(targetSession, jsonMsg);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[SendWhisper 오류] {ex.Message}");
+        }
+    }
+
     // ---------------- 방 목록 브로드캐스트 ----------------
     private static void BroadcastRoomList()
     {
         using var conn = new MySqlConnection(connectionString);
         conn.Open();
 
-        var cmd = new MySqlCommand("SELECT RoomId, RoomName, Host, Difficulty, MaxPlayers, (SELECT COUNT(*) FROM RoomPlayers rp WHERE rp.RoomId = r.RoomId) AS CurrentPlayers FROM Rooms r", conn);
+        var cmd = new MySqlCommand(@"
+        SELECT 
+            r.RoomId, 
+            r.RoomName, 
+            r.Host, 
+            r.Difficulty, 
+            (
+                SELECT COUNT(*) 
+                FROM RoomPlayers rp
+                WHERE rp.RoomId = r.RoomId
+                  AND rp.IsClosed = 0      -- 닫힌 슬롯은 카운트 제외
+            ) AS MaxPlayers,
+            (
+                SELECT COUNT(*) 
+                FROM RoomPlayers rp 
+                WHERE rp.RoomId = r.RoomId
+                  AND rp.UserId <> 0       -- 실제 유저만
+                  AND rp.IsClosed = 0      -- 닫힌 슬롯 제외
+            ) AS CurrentPlayers,
+            COALESCE(t.ColorGradient, '#FFFFFF') AS ColorGradient
+        FROM Rooms r
+        LEFT JOIN Users u ON u.Username = r.Host
+        LEFT JOIN Titles t ON t.TitleId = u.TitleId;", conn);
 
         var reader = cmd.ExecuteReader();
         var roomList = new List<object>();
@@ -896,7 +1277,8 @@ class Program
                 Host = reader.GetString("Host"),
                 Difficulty = reader.GetString("Difficulty"),
                 CurrentPlayers = reader.GetInt32("CurrentPlayers"),
-                MaxPlayers = reader.GetInt32("MaxPlayers")
+                MaxPlayers = reader.GetInt32("MaxPlayers"),
+                ColorGradient = reader.GetString("ColorGradient")
             });
         }
 
@@ -915,7 +1297,29 @@ class Program
         using var conn = new MySqlConnection(connectionString);
         conn.Open();
 
-        var cmd = new MySqlCommand("SELECT RoomId, RoomName, Host, Difficulty, MaxPlayers, (SELECT COUNT(*) FROM RoomPlayers rp WHERE rp.RoomId = r.RoomId) AS CurrentPlayers FROM Rooms r", conn);
+        var cmd = new MySqlCommand(@"
+        SELECT 
+            r.RoomId, 
+            r.RoomName, 
+            r.Host, 
+            r.Difficulty, 
+            (
+                SELECT COUNT(*) 
+                FROM RoomPlayers rp
+                WHERE rp.RoomId = r.RoomId
+                  AND rp.IsClosed = 0      -- 닫힌 슬롯은 카운트 제외
+            ) AS MaxPlayers,
+            (
+                SELECT COUNT(*) 
+                FROM RoomPlayers rp 
+                WHERE rp.RoomId = r.RoomId
+                  AND rp.UserId <> 0       -- 실제 유저만
+                  AND rp.IsClosed = 0      -- 닫힌 슬롯 제외
+            ) AS CurrentPlayers,
+            COALESCE(t.ColorGradient, '#FFFFFF') AS ColorGradient
+        FROM Rooms r
+        LEFT JOIN Users u ON u.Username = r.Host
+        LEFT JOIN Titles t ON t.TitleId = u.TitleId;", conn);
         var reader = cmd.ExecuteReader();
 
         var roomList = new List<object>();
@@ -928,7 +1332,8 @@ class Program
                 Host = reader.GetString("Host"),
                 Difficulty = reader.GetString("Difficulty"),
                 CurrentPlayers = reader.GetInt32("CurrentPlayers"),
-                MaxPlayers = reader.GetInt32("MaxPlayers")
+                MaxPlayers = reader.GetInt32("MaxPlayers"),
+                ColorGradient = reader.GetString("ColorGradient")
             });
         }
 
@@ -958,7 +1363,23 @@ class Program
         string difficulty = reader.GetString("Difficulty");
         reader.Close();
 
-        var cmd2 = new MySqlCommand(@"SELECT PlayerSlot, UserId, Username, IsHost, IsClosed FROM RoomPlayers WHERE RoomId=@rid ORDER BY PlayerSlot", conn);
+        var cmd2 = new MySqlCommand(@"
+        SELECT rp.PlayerSlot, rp.UserId,
+               CASE 
+                   WHEN rp.IsClosed = 1 THEN 'Close'
+                   WHEN rp.UserId = 0 THEN 'Open'
+                   ELSE rp.Username 
+               END AS Username,
+               rp.IsHost,
+               rp.IsClosed,
+               IFNULL(t.TitleId, 0) AS TitleId,
+               IFNULL(t.TitleName, '') AS TitleName,
+               IFNULL(t.ColorGradient, '#FFFFFF') AS ColorGradient
+        FROM RoomPlayers rp
+        LEFT JOIN Users u ON rp.UserId = u.Id
+        LEFT JOIN Titles t ON u.TitleId = t.TitleId
+        WHERE rp.RoomId=@rid
+        ORDER BY rp.PlayerSlot", conn);
         cmd2.Parameters.AddWithValue("@rid", roomId);
         var players = new List<object>();
         var r2 = cmd2.ExecuteReader();
@@ -970,7 +1391,10 @@ class Program
                 UserId = r2.GetInt32("UserId"),
                 Username = r2.GetString("Username"),
                 IsHost = r2.GetBoolean("IsHost"),
-                IsClosed = r2.GetBoolean("IsClosed")
+                IsClosed = r2.GetBoolean("IsClosed"),
+                TitleId = r2.GetInt32("TitleId"),
+                TitleName = r2.GetString("TitleName"),
+                ColorGradient = r2.GetString("ColorGradient")
             });
         }
 

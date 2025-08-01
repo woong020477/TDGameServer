@@ -1,0 +1,46 @@
+DB
+
+- 특정 데이터베이스 선택
+USE DB명;
+
+- 서버에 있는 모든 데이터베이스 목록 보기
+SHOW DATABASES;
+
+- 새로운 데이터베이스 생성
+CREATE DATABASE DB이름;
+
+-데이터베이스 삭제
+DROP DATABASE DB이름;
+
+-현재 사용 중인 데이터베이스 확인
+SELECT DATABASE();
+
+- 현재 DB에 있는 모든 테이블 보기
+SHOW TABLES;
+
+- 테이블 구조(컬럼, 타입, 키, Null 여부) 보기
+DESCRIBE tablename;
+
+테이블 생성
+CREATE TABLE;
+
+테이블 구조 변경(컬럼 추가/삭제/수정)
+ALTER TABLE;
+
+테이블 삭제
+DROP TABLE tablename;
+
+테이블 이름 변경
+RENAME TABLE oldname TO newname;	
+
+
+칭호 추가방법
+INSERT INTO Titles (TitleName, ColorGradient) VALUES ('원하는 칭호이름', '그라디언트 프리셋이름');
+
+이 외 명령어 https://www.notion.so/MySQL-2420577acfd8803897a1c6a2c1f6345b
+---------------------------------------------------------------------------------------------------------------------
+MySQL에서 지금까지 작업한 데이터베이스 (DB) 파일을 내보내려면 mysqldump 명령어를 사용합니다.
+이 명령어는 데이터베이스의 스키마와 데이터를 SQL 덤프 파일로 저장합니다.
+이렇게 저장된 파일은 다른 MySQL 서버로 쉽게 가져오거나 백업용으로 사용할 수 있습니다. 
+
+mysqldump -u [사용자 이름] -p[비밀번호] [데이터베이스 이름] > [저장할 파일 이름].sql
