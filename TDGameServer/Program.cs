@@ -23,15 +23,21 @@ class Program
     {
         // DB 설정 로드
         LoadDbConfig();
-        Console.WriteLine("DB 연결 문자열 로드 완료: " + connectionString);
+        Console.WriteLine("[Server] DB 연결 완료");
 
         // TCP 서버 시작
         TcpListener server = new TcpListener(IPAddress.Any, 5000);
         server.Start();
-        Console.WriteLine("TCP 서버가 5000 포트에서 실행 중입니다...");
+        Console.WriteLine("[TCP] 서버가 포트 5000에서 실행 중입니다...");
 
         // 세션 모니터링 스레드 시작
         MonitorSessions();
+
+        Task.Run(() =>
+        {
+            UdpServer udp = new UdpServer(9000);
+            udp.Start();
+        });
 
         // 클라이언트 연결 대기
         while (true)
@@ -75,7 +81,7 @@ class Program
 
                 string request = Encoding.UTF8.GetString(buffer, 0, bytesRead);
                 if(!request.Contains("\"Command\":\"ping\""))
-                    Console.WriteLine("요청 수신: " + request);
+                    Console.WriteLine("[TCP 수신] " + request);
 
                 string response = HandleRequest(request, client);
                 byte[] respBytes = Encoding.UTF8.GetBytes(response);
@@ -127,24 +133,6 @@ class Program
             // 모든 클라이언트에게 방이 닫혔음을 알림
             BroadcastMessage(JsonSerializer.Serialize(new {Command = "room-closed", RoomId = roomId}));
         }
-    }
-
-
-    // 방 이름 유효성 검사
-    private static bool ValidateRoomName(string roomName)
-    {
-        int count = 0;
-
-        foreach (char c in roomName)
-        {
-            if (c >= 0xAC00 && c <= 0xD7A3) // 한글 범위
-                count += 2; // 한글은 2글자로 계산
-            else
-                count += 1; // 영어/숫자 등은 1글자로 계산
-        }
-
-        // 한글 최대 20(=10글자*2), 영어 최대 20
-        return count <= 20;
     }
 
     // 요청 처리
@@ -772,6 +760,30 @@ class Program
                             Difficulty = difficulty,
                             Players = players
                         });
+                    }
+
+                // 게임 시작 시 방 정보 재사용
+                case "game-start":
+                    {
+                        int roomId = doc.RootElement.GetProperty("RoomId").GetInt32();
+
+                        var roomData = GetRoomInfo(roomId);
+
+                        var startMsg = JsonSerializer.Serialize(new
+                        {
+                            Command = "room-info-game-start",
+                            RoomId = roomId,
+                            RoomName = roomData.RoomName,
+                            Host = roomData.Host,
+                            Difficulty = roomData.Difficulty,
+                            Players = roomData.Players
+                        });
+
+                        // 모든 유저에게 단일 패킷 전송 (로비→게임 전환 데이터)
+                        BroadcastMessageToRoomByRoomId(roomId, startMsg);
+
+                        // 별도의 game-start-result 응답이 있었지만 이 자리를 제거함
+                        return string.Empty;
                     }
 
                 default:
@@ -1410,6 +1422,84 @@ class Program
 
         BroadcastMessage(jsonMsg);
     }
+
+    // ---------------- 방에 메시지 브로드캐스트 (roomId 기반) ----------------
+    private static void BroadcastMessageToRoomByRoomId(int roomId, string jsonMsg)
+    {
+        try
+        {
+            using var conn = new MySqlConnection(connectionString);
+            conn.Open();
+
+            var cmd = new MySqlCommand("SELECT UserId FROM RoomPlayers WHERE RoomId=@rid AND UserId <> 0", conn);
+            cmd.Parameters.AddWithValue("@rid", roomId);
+
+            using var reader = cmd.ExecuteReader();
+            while (reader.Read())
+            {
+                int targetUserId = reader.GetInt32("UserId");
+                if (sessions.TryGetValue(targetUserId, out var targetSession) && targetSession != null)
+                {
+                    SendMessageToClient(targetSession, jsonMsg);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[BroadcastMessageToRoomByRoomId 오류] {ex.Message}");
+        }
+    }
+
+    // ---------------- roomId 기반으로 방 정보 조회 ----------------
+    private static (string RoomName, string Host, string Difficulty, List<object> Players) GetRoomInfo(int roomId)
+    {
+        using var conn = new MySqlConnection(connectionString);
+        conn.Open();
+
+        // 1) 방 기본 정보 조회
+        var cmdRoom = new MySqlCommand("SELECT RoomName, Host, Difficulty FROM Rooms WHERE RoomId=@rid", conn);
+        cmdRoom.Parameters.AddWithValue("@rid", roomId);
+        using var reader = cmdRoom.ExecuteReader();
+        if (!reader.Read())
+            throw new Exception("방을 찾을 수 없습니다.");
+
+        string roomName = reader.GetString("RoomName");
+        string hostName = reader.GetString("Host");
+        string difficulty = reader.GetString("Difficulty");
+        reader.Close();
+
+        // 2) 플레이어 목록 조회
+        var cmdPlayers = new MySqlCommand(@"
+        SELECT rp.PlayerSlot, rp.UserId, rp.Username, rp.IsHost, rp.IsClosed,
+               IFNULL(t.TitleId, 0) AS TitleId,
+               IFNULL(t.TitleName, '') AS TitleName,
+               IFNULL(t.ColorGradient, '#000000') AS ColorGradient
+        FROM RoomPlayers rp
+        LEFT JOIN Users u ON rp.UserId = u.Id
+        LEFT JOIN Titles t ON u.TitleId = t.TitleId
+        WHERE rp.RoomId=@rid
+        ORDER BY rp.PlayerSlot", conn);
+        cmdPlayers.Parameters.AddWithValue("@rid", roomId);
+
+        var players = new List<object>();
+        using var reader2 = cmdPlayers.ExecuteReader();
+        while (reader2.Read())
+        {
+            players.Add(new
+            {
+                PlayerSlot = reader2.GetInt32("PlayerSlot"),
+                UserId = reader2.GetInt32("UserId"),
+                Username = reader2.GetString("Username"),
+                IsHost = reader2.GetBoolean("IsHost"),
+                IsClosed = reader2.GetBoolean("IsClosed"),
+                TitleId = reader2.GetInt32("TitleId"),
+                TitleName = reader2.GetString("TitleName"),
+                ColorGradient = reader2.GetString("ColorGradient")
+            });
+        }
+
+        return (roomName, hostName, difficulty, players);
+    }
 }
 
 public class Session
@@ -1435,4 +1525,130 @@ public class RoomInfo
     public required string Difficulty { get; set; }
     public int CurrentPlayers { get; set; }
     public int MaxPlayers { get; set; } = 4;
+}
+
+// UDP 서버 클래스
+public class UdpServer
+{
+    private UdpClient? udpServer;
+    private readonly HashSet<IPEndPoint> clients = new();
+    private bool running = false;
+    private readonly int port;
+
+    public UdpServer(int listenPort)
+    {
+        port = listenPort;
+    }
+
+    public void Start()
+    {
+        udpServer = new UdpClient(port);
+        running = true;
+        Console.WriteLine($"[UDP] 서버가 포트 {port}에서 실행 중입니다...");
+        Console.WriteLine($"서버를 종료 하시려면 Ctrl + C를 눌러주세요!");
+        Task.Run(ListenLoop);
+    }
+
+    public void Stop()
+    {
+        running = false;
+        udpServer?.Close();
+    }
+
+    // 비동기 수신 루프
+    private async Task ListenLoop()
+    {
+        while (running)
+        {
+            try
+            {
+                if (udpServer == null)
+                    return;
+
+                UdpReceiveResult result = await udpServer.ReceiveAsync();
+                string message = Encoding.UTF8.GetString(result.Buffer);
+
+                // 클라이언트 등록
+                if (!clients.Contains(result.RemoteEndPoint))
+                {
+                    clients.Add(result.RemoteEndPoint);
+                    Console.WriteLine($"[UDP] 새 클라이언트 등록: {result.RemoteEndPoint}");
+                }
+
+                Console.WriteLine($"[UDP 수신] {result.RemoteEndPoint} → {message}");
+
+                HandleMessage(message, result.RemoteEndPoint);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[UDP 오류] {ex.Message}");
+            }
+        }
+    }
+
+    // 메시지 처리 핸들러
+    private void HandleMessage(string message, IPEndPoint sender)
+    {
+        string header;
+        string json;
+
+        // header|json 구조 분리
+        if (message.Contains("|"))
+        {
+            var parts = message.Split('|', 2);
+            header = parts[0];
+            json = parts.Length > 1 ? parts[1] : "{}";
+        }
+        else
+        {
+            // action 필드가 있을 수도 있으니 시도
+            var msgBase = JsonSerializer.Deserialize<UDPBaseMessage>(message);
+            header = msgBase?.action ?? "";
+            json = message;
+        }
+
+        // header가 비어있으면 스킵
+        if (string.IsNullOrEmpty(header))
+        {
+            Console.WriteLine("[UDP] header 누락 메시지 스킵");
+            return;
+        }
+
+        // 메시지 처리 로직
+        Broadcast($"{header}|{json}", sender);
+    }
+
+    // 클라이언트에게 메시지 브로드캐스트
+    private void Broadcast(string message, IPEndPoint sender)
+    {
+        byte[] data = Encoding.UTF8.GetBytes(message);
+        foreach (var client in clients)
+        {
+            if (!client.Equals(sender))
+            {
+                udpServer?.Send(data, data.Length, client);
+            }
+        }
+    }
+}
+
+// 기본 메시지 구조
+public class UDPBaseMessage
+{
+    public string? action { get; set; } // null 허용
+}
+
+// 타워 건설 메시지 구조
+public class TowerBuildMessage : UDPBaseMessage
+{
+    public int userId { get; set; }
+    public string? towerType { get; set; } // null 허용
+    public PositionData? position { get; set; } // null 허용
+
+    public class PositionData
+    {
+        public float x { get; set; }
+        public float y { get; set; }
+        public float z { get; set; }
+    }
 }

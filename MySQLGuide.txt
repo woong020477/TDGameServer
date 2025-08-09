@@ -38,9 +38,19 @@ RENAME TABLE oldname TO newname;
 INSERT INTO Titles (TitleName, ColorGradient) VALUES ('원하는 칭호이름', '그라디언트 프리셋이름');
 
 이 외 명령어 https://www.notion.so/MySQL-2420577acfd8803897a1c6a2c1f6345b
+
 ---------------------------------------------------------------------------------------------------------------------
 MySQL에서 지금까지 작업한 데이터베이스 (DB) 파일을 내보내려면 mysqldump 명령어를 사용합니다.
 이 명령어는 데이터베이스의 스키마와 데이터를 SQL 덤프 파일로 저장합니다.
 이렇게 저장된 파일은 다른 MySQL 서버로 쉽게 가져오거나 백업용으로 사용할 수 있습니다. 
 
-mysqldump -u [사용자 이름] -p[비밀번호] [데이터베이스 이름] > [저장할 파일 이름].sql
+mysqldump -u 사용자 이름 -p 데이터베이스 이름 > 저장할 파일 이름.sql
+
+만약 MySQL PATH 환경설정을 하지 않은경우
+"C:\Program Files\MySQL\MySQL Server 8.0\bin\mysqldump.exe" -u root -p TDGameDB > TDGameServerDB.sql
+
+내 아이피 확인(CMD)
+nslookup myip.opendns.com resolver1.opendns.com
+
+방화벽 인바운드 규칙에 포트 오픈
+netsh advfirewall firewall add rule name="TDGameServer" dir=in action=allow protocol=TCP localport=5000
