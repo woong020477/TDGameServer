@@ -1615,11 +1615,11 @@
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "C:\\Users\\woong\\OneDrive\\문서\\GitHub\\TDGameServer\\TDGameServer\\TDGameServer.csproj",
+      "projectUniqueName": "C:\\Users\\woong\\GitHub\\TDGameServer\\TDGameServer\\TDGameServer.csproj",
       "projectName": "TDGameServer",
-      "projectPath": "C:\\Users\\woong\\OneDrive\\문서\\GitHub\\TDGameServer\\TDGameServer\\TDGameServer.csproj",
+      "projectPath": "C:\\Users\\woong\\GitHub\\TDGameServer\\TDGameServer\\TDGameServer.csproj",
       "packagesPath": "C:\\Users\\woong\\.nuget\\packages\\",
-      "outputPath": "C:\\Users\\woong\\OneDrive\\문서\\GitHub\\TDGameServer\\TDGameServer\\obj\\",
+      "outputPath": "C:\\Users\\woong\\GitHub\\TDGameServer\\TDGameServer\\obj\\",
       "projectStyle": "PackageReference",
       "fallbackFolders": [
         "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
@@ -1680,7 +1680,7 @@
             "privateAssets": "all"
           }
         },
-        "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\9.0.302/PortableRuntimeIdentifierGraph.json"
+        "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\9.0.305/PortableRuntimeIdentifierGraph.json"
       }
     }
   }
