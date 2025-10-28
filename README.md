@@ -356,6 +356,141 @@ UDP 서버(포트 9000)에서 인게임 중 저지연 브로드캐스트를 처�
 
 ---
 
+## DB Schema Overview
+
+이 문서는 TDGameDB(MySQL) 초기 스키마 요약본이다. 실제 생성 쿼리는 TDGameServerDB.sql 을 기준으로 작성되었다.
+
+---  
+### 1) users
+목적: 계정 / 인증 / 칭호 정보 저장
+
+PK:
+- Id (INT AUTO_INCREMENT)
+
+컬럼:
+- Id            : 유저 고유 ID
+- Username      : 닉네임 (VARCHAR(50))  [UNIQUE]
+- Email         : 이메일 (VARCHAR(100)) [UNIQUE]
+- PasswordHash  : 비밀번호 해시 (VARCHAR(255))
+- CreatedAt     : 가입 시간 (DATETIME, DEFAULT CURRENT_TIMESTAMP)
+- TitleId       : 현재 장착 중인 칭호 ID (INT, DEFAULT 0)
+
+제약:
+- unique_username (Username UNIQUE)
+- unique_email    (Email UNIQUE)
+
+서버 사용처:
+- 로그인 / 회원가입 / 이메일 찾기 / 비밀번호 초기화
+- 현재 장착된 칭호(TitleId)를 통해 칭호 이름/컬러를 조회해서 클라이언트에게 전달한다.
+  (예: TitleName, ColorGradient)
+
+
+
+### 2) titles
+
+목적: 칭호(타이틀) 및 닉네임 컬러 정보
+
+PK:
+- TitleId (INT AUTO_INCREMENT)
+
+컬럼:
+- TitleId        : 칭호 ID
+- TitleName      : 칭호명 (예: "GM", "Bronze", "Gold"...)
+- ColorGradient  : 닉네임에 적용할 그라디언트(또는 컬러 프리셋) 문자열
+
+초기 데이터 예:
+(1,'GM','Gradient1'),
+(2,'Bronze','Gradient2'),
+(3,'Silver','Gradient3'),
+(4,'Gold','Gradient4'),
+(5,'Platinum','Gradient5'),
+(6,'Diamond','Gradient6'),
+(7,'Challenger','Gradient7'),
+(8,'Disney','Gradient8'),
+(9,'DU','Gradient9')
+
+서버 사용처:
+- 로그인 성공 시 유저의 TitleId를 titles와 조인해서
+  TitleName / ColorGradient를 같이 내려준다.
+- ChangeTitle 요청 시 TitleId를 갱신하고 다시 브로드캐스트한다.
+
+
+
+### 3) rooms
+
+목적: 로비에 표시되는 "방(룸)" 기본 정보
+
+PK:
+- RoomId (INT AUTO_INCREMENT)
+
+컬럼:
+- RoomId          : 방 ID
+- RoomName        : 방 이름 (VARCHAR(50))
+- HostId          : 방장 유저 ID (INT)
+- Host            : 방장 닉네임 (VARCHAR(50))
+- Difficulty      : 난이도 ENUM('Easy','Normal','Hard','Challenge')
+- CurrentPlayers  : 현재 인원 수 (INT DEFAULT 1)
+- MaxPlayers      : 최대 인원 수 (INT DEFAULT 4)
+- CreatedAt       : 생성 시각 (TIMESTAMP DEFAULT CURRENT_TIMESTAMP)
+
+서버 사용처:
+- 방 목록(room-list-update) 브로드캐스트 시 이 정보를 사용
+- 방 상세(room-info / game-start 브로드캐스트) 전송 시 기본 메타데이터로 내려감
+- HostId/Host 는 홀더(방장) 추적/호스트 양도 등에 사용
+
+
+
+### 4) roomplayers
+
+목적: 특정 방(Room) 내부 슬롯 상태 관리
+
+PK:
+- RoomPlayerId (INT AUTO_INCREMENT)
+
+UNIQUE:
+- (RoomId, PlayerSlot)  
+  → 한 방(RoomId) 안에서 같은 슬롯 번호(PlayerSlot)는 하나만 존재
+
+컬럼:
+- RoomPlayerId : 슬롯 row 고유 ID
+- RoomId       : 어느 방에 속해 있는지 (INT)
+- UserId       : 그 슬롯을 차지한 유저 ID (INT)
+- Username     : 그 슬롯에 표시할 닉네임 (VARCHAR(50))
+- PlayerSlot   : 자리 번호 (예: 1P, 2P, 3P, 4P)
+- IsHost       : 방장 여부 (TINYINT(1), 기본 0)
+- IsClosed     : 슬롯이 닫혀(join 불가) 있는지 여부 (TINYINT(1), 기본 0)
+
+FK:
+- RoomId → rooms.RoomId (ON DELETE CASCADE)
+  → 방이 삭제되면 해당 방의 roomplayers 슬롯 정보도 함께 삭제된다.
+
+서버 사용처:
+- CreateRoom 시 1P~4P 슬롯을 미리 생성하고, 1P를 Host로 설정
+- JoinRoom / ExitRoom / Kick / MoveSlot / OpenSlot / CloseSlot 등 모든 자리 편집 로직의 실제 저장소
+- room-update, room-info, game-start 브로드캐스트 시 각 슬롯 정보(누가 어디 앉아 있는지, 닫힌 슬롯인지, 호스트인지 등)를 그대로 내려줌
+
+
+---------------------------------
+[요약 / 관계]
+---------------------------------
+- users
+  ↕ (TitleId → titles.TitleId)
+  유저는 하나의 칭호를 장착할 수 있고, 클라이언트 UI는 titles 정보를 사용해
+  닉네임 컬러/호칭을 표시한다.
+
+- rooms
+  ↕ (rooms.RoomId ← roomplayers.RoomId ON DELETE CASCADE)
+  각 방은 여러 roomplayers 슬롯을 가진다.
+  슬롯은 누가 어떤 자리(PlayerSlot)에 앉아 있는지, 호스트인지, 닫혀 있는지(IsClosed) 정보를 담는다.
+
+서버 로직 흐름:
+1. users 에서 로그인/인증/칭호 정보를 관리
+2. rooms + roomplayers 로 현재 로비의 방 상태와 슬롯 구성을 관리
+3. titles 로 닉네임 꾸미기(TitleName, ColorGradient)를 제공
+4. 이 모든 정보를 TCP 응답(JSON)과 브로드캐스트에 실어 Unity 클라이언트 UI로 전달한다.
+
+---
+
 ## 프로젝트 클론 시 안내사항  
 TDGameServer.sln 파일을 통해 VS솔루션을 확인하실 수 있습니다.  
 DB는 MySQL을 사용하였고 셋업 파일명은 TDGameServerDB입니다.
