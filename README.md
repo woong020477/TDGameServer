@@ -5,8 +5,11 @@ Unity 타워 디펜스 게임 Terion TD .NET 서버입니다.
 서버는 .NET 콘솔 애플리케이션으로 동작하며,  
 TCP 서버(포트 5000)에서 로그인, 로비, 방 관리, 채팅 등 게임 로직 전반을 처리하고,  
 UDP 서버(포트 9000)에서 인게임 중 저지연 브로드캐스트를 처리합니다.  
-서버는 MySQL과 연결되어 유저 정보, 방 정보, 칭호(Title) 등 영구 데이터를 관리합니다. DB 연결 정보는 appsettings.json에서 읽어와 구성되고, 서버 시작 시 로드됩니다.  
-또한 접속 중인 클라이언트(세션)는 ConcurrentDictionary<int, Session>으로 관리하며, UserId, Username, TCP 연결 소켓, 마지막 ping 시간 등을 추적합니다. 이 정보는 브로드캐스트, 방 단위 메시지 전송, 강제 퇴장 처리 등에 사용됩니다.  
+서버는 MySQL과 연결되어 유저 정보, 방 정보, 칭호(Title) 등 영구 데이터를 관리합니다.  
+DB 연결 정보는 appsettings.json에서 읽어와 구성되고, 서버 시작 시 로드됩니다.  
+  
+또한 접속 중인 클라이언트(세션)는 ConcurrentDictionary<int, Session>으로 관리하며, UserId, Username, TCP 연결 소켓, 마지막 ping 시간 등을 추적합니다.  
+이 정보는 브로드캐스트, 방 단위 메시지 전송, 강제 퇴장 처리 등에 사용됩니다.  
 
 ---
 
