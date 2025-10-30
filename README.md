@@ -122,7 +122,7 @@ DB 연결 정보는 appsettings.json에서 읽어와 구성되고, 서버 시작
   "Command": "register",
   "Username": "닉네임",
   "Email": "user@example.com",
-  "Password": "SHA256해시 or 원문(클라 정책에 따라)"
+  "Password": "비밀번호 원문(서버 내에서 암호화 처리)"
 }
 ```
 
@@ -146,7 +146,7 @@ DB 연결 정보는 appsettings.json에서 읽어와 구성되고, 서버 시작
 
 - `Command`: "login"  
 - `Email`: 로그인용 이메일  
-- `Password`: 비밀번호(해시된 값 사용 가능)  
+- `Password`: 비밀번호  
 
 서버는 인증에 성공하면 세션을 생성하고, UserId / Username / 현재 칭호 등의 정보를 기억합니다. 세션은 `UserId`, `Username`, `Client`(TcpClient), `LastPing`으로 구성됩니다.
 
@@ -495,8 +495,9 @@ FK:
 ---
 
 ## 프로젝트 클론 시 안내사항  
-TDGameServer.sln 파일을 통해 VS솔루션을 확인하실 수 있습니다.  
+TDGameServer.sln 파일을 통해 VS솔루션을 확인하실 수 있습니다.(프로젝트 실행은 솔루션 열어서 Program.cs 빌드 하시면 됩니다.)  
 DB는 MySQL을 사용하였고 셋업 파일명은 TDGameServerDB입니다.
-따로 DB 셋업을 수정하실 경우 appsettings.json 파일도 수정해야 DB 접근 가능합니다.
+기본적으로 로컬호스트(서버를 여는 하드웨어 기준)에 대한 접근을 기본값으로 지정하였으며 MySQL에 비밀번호를 걸어 두었다면 appsettings.json에서 비밀번호를 기입하실 수 있습니다.
+이외 따로 DB 접근 셋업을 수정하실 경우 appsettings.json 파일도 수정해야 DB 접근 가능합니다.
 
 ---
