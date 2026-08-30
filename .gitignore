@@ -1,2 +1,11 @@
-#DB 접속 관련 개인정보 커밋방지
+# Database credentials must be supplied by environment variables or an untracked local file.
 /TDGameServer/appsettings.json
+
+# .NET build output
+**/bin/
+**/obj/
+
+# Local IDE and OS files
+.vs/
+.idea/
+.DS_Store
