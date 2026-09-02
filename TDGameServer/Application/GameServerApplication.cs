@@ -21,6 +21,7 @@ public static class GameServerApplication
 
     // 접속 세션 관리
     private static readonly ConcurrentDictionary<int, Session> sessions = new();
+    private static readonly ConcurrentDictionary<int, byte> startedRooms = new();
 
     /// <summary>
     /// 실행 설정을 로드하고 TCP, UDP, 세션 모니터를 구성합니다.
@@ -80,6 +81,7 @@ public static class GameServerApplication
 
             // 모든 클라이언트에게 방이 닫혔음을 알림
             BroadcastMessage(JsonSerializer.Serialize(new {Command = "room-closed", RoomId = roomId}));
+            startedRooms.TryRemove(roomId, out _);
         }
     }
 
@@ -333,6 +335,9 @@ public static class GameServerApplication
                         int userId = doc.RootElement.GetProperty("UserId").GetInt32();
                         string username = doc.RootElement.GetProperty("Username").GetString() ?? "";
 
+                        if (startedRooms.ContainsKey(roomId))
+                            return JsonSerializer.Serialize(new { Command = "join-room-result", Message = "이미 게임이 시작된 방입니다." });
+
                         using var conn = new MySqlConnection(connectionString);
                         conn.Open();
 
@@ -387,9 +392,25 @@ public static class GameServerApplication
                     {
                         int roomId = doc.RootElement.GetProperty("RoomId").GetInt32();
                         int targetUserId = doc.RootElement.GetProperty("TargetUserId").GetInt32();
+                        Session? requester = FindSessionByClient(client);
+                        if (requester == null || !IsRoomHost(roomId, requester.UserId))
+                            return JsonSerializer.Serialize(new { Command = "error", Message = "방장만 플레이어를 강퇴할 수 있습니다." });
+                        if (targetUserId == requester.UserId)
+                            return JsonSerializer.Serialize(new { Command = "error", Message = "방장은 자신을 강퇴할 수 없습니다." });
 
                         using var conn = new MySqlConnection(connectionString);
                         conn.Open();
+
+                        // 제거 전에 대상에게 먼저 알린다. 제거 후에는 방 브로드캐스트 대상에서 빠지기 때문이다.
+                        if (sessions.TryGetValue(targetUserId, out Session? kickedSession) && kickedSession != null)
+                        {
+                            SendMessageToClient(kickedSession, JsonSerializer.Serialize(new
+                            {
+                                Command = "kicked-from-room",
+                                RoomId = roomId,
+                                Message = "방장에 의해 강퇴되었습니다."
+                            }));
+                        }
 
                         // 대상 슬롯을 빈 상태로 초기화
                         var cmd = new MySqlCommand(@"
@@ -410,6 +431,10 @@ public static class GameServerApplication
                         int roomId = doc.RootElement.GetProperty("RoomId").GetInt32();
                         int fromSlot = doc.RootElement.GetProperty("FromSlot").GetInt32();
                         int toSlot = doc.RootElement.GetProperty("ToSlot").GetInt32();
+                        Session? requester = FindSessionByClient(client);
+
+                        if (requester == null)
+                            return JsonSerializer.Serialize(new { Command = "error", Message = "로그인 세션을 확인할 수 없습니다." });
 
                         if (fromSlot == toSlot)
                             return JsonSerializer.Serialize(new { Command = "move-slot-result", Message = "같은 슬롯으로는 이동할 수 없습니다." });
@@ -431,6 +456,10 @@ public static class GameServerApplication
                         bool isHost = reader.GetBoolean("IsHost");
                         reader.Close();
 
+                        bool requesterIsHost = IsRoomHost(roomId, requester.UserId);
+                        if (!requesterIsHost && targetUserId != requester.UserId)
+                            return JsonSerializer.Serialize(new { Command = "error", Message = "자신의 자리만 이동할 수 있습니다." });
+
                         // ---------------- 비호스트 처리 ----------------
                         if (!isHost)
                         {
@@ -451,15 +480,28 @@ public static class GameServerApplication
                             if (destUserId != 0 || destClosed)
                                 return JsonSerializer.Serialize(new { Command = "move-slot-result", Message = "대상 슬롯이 사용 중이거나 닫혀 있습니다." });
 
-                            // 빈 슬롯으로 이동
-                            var updateCmd = new MySqlCommand(
-                                @"UPDATE RoomPlayers SET PlayerSlot=@to 
-                                WHERE RoomId=@rid AND PlayerSlot=@from AND UserId=@uid", conn);
-                            updateCmd.Parameters.AddWithValue("@rid", roomId);
-                            updateCmd.Parameters.AddWithValue("@from", fromSlot);
-                            updateCmd.Parameters.AddWithValue("@to", toSlot);
-                            updateCmd.Parameters.AddWithValue("@uid", targetUserId);
-                            updateCmd.ExecuteNonQuery();
+                            // 빈 슬롯 행도 보존해야 하므로 두 행의 슬롯 번호를 트랜잭션으로 교환한다.
+                            using var transaction = conn.BeginTransaction();
+                            var moveEmptyAside = new MySqlCommand(
+                                "UPDATE RoomPlayers SET PlayerSlot=99 WHERE RoomId=@rid AND PlayerSlot=@to", conn, transaction);
+                            moveEmptyAside.Parameters.AddWithValue("@rid", roomId);
+                            moveEmptyAside.Parameters.AddWithValue("@to", toSlot);
+                            moveEmptyAside.ExecuteNonQuery();
+
+                            var movePlayer = new MySqlCommand(
+                                "UPDATE RoomPlayers SET PlayerSlot=@to WHERE RoomId=@rid AND PlayerSlot=@from AND UserId=@uid", conn, transaction);
+                            movePlayer.Parameters.AddWithValue("@rid", roomId);
+                            movePlayer.Parameters.AddWithValue("@from", fromSlot);
+                            movePlayer.Parameters.AddWithValue("@to", toSlot);
+                            movePlayer.Parameters.AddWithValue("@uid", targetUserId);
+                            movePlayer.ExecuteNonQuery();
+
+                            var restoreEmpty = new MySqlCommand(
+                                "UPDATE RoomPlayers SET PlayerSlot=@from WHERE RoomId=@rid AND PlayerSlot=99", conn, transaction);
+                            restoreEmpty.Parameters.AddWithValue("@rid", roomId);
+                            restoreEmpty.Parameters.AddWithValue("@from", fromSlot);
+                            restoreEmpty.ExecuteNonQuery();
+                            transaction.Commit();
 
                             BroadcastRoomUpdate(roomId);
                             return JsonSerializer.Serialize(new { Command = "move-slot-result", Message = $"{fromSlot}P → {toSlot}P로 이동 완료" });
@@ -509,9 +551,19 @@ public static class GameServerApplication
                     {
                         int roomId = doc.RootElement.GetProperty("RoomId").GetInt32();
                         int newHostUserId = doc.RootElement.GetProperty("TargetUserId").GetInt32();
+                        Session? requester = FindSessionByClient(client);
+                        if (requester == null || !IsRoomHost(roomId, requester.UserId))
+                            return JsonSerializer.Serialize(new { Command = "error", Message = "현재 방장만 방장을 위임할 수 있습니다." });
 
                         using var conn = new MySqlConnection(connectionString);
                         conn.Open();
+
+                        var targetCheckCmd = new MySqlCommand(
+                            "SELECT COUNT(*) FROM RoomPlayers WHERE RoomId=@rid AND UserId=@uid AND UserId<>0", conn);
+                        targetCheckCmd.Parameters.AddWithValue("@rid", roomId);
+                        targetCheckCmd.Parameters.AddWithValue("@uid", newHostUserId);
+                        if (Convert.ToInt32(targetCheckCmd.ExecuteScalar()) != 1)
+                            return JsonSerializer.Serialize(new { Command = "error", Message = "방장으로 지정할 플레이어를 찾을 수 없습니다." });
 
                         // 기존 호스트 해제
                         var resetCmd = new MySqlCommand("UPDATE RoomPlayers SET IsHost=0 WHERE RoomId=@rid", conn);
@@ -662,6 +714,9 @@ public static class GameServerApplication
                     {
                         int roomId = doc.RootElement.GetProperty("RoomId").GetInt32();
 
+                        if (startedRooms.ContainsKey(roomId))
+                            return JsonSerializer.Serialize(new { Command = "room-info", Message = "이미 게임이 시작된 방입니다." });
+
                         using var conn = new MySqlConnection(connectionString);
                         conn.Open();
 
@@ -726,6 +781,9 @@ public static class GameServerApplication
                     {
                         int roomId = doc.RootElement.GetProperty("RoomId").GetInt32();
 
+                        if (startedRooms.ContainsKey(roomId))
+                            return JsonSerializer.Serialize(new { Command = "error", Message = "이미 시작된 게임입니다." });
+
                         Session? requester = FindSessionByClient(client);
                         if (requester == null || !IsRoomHost(roomId, requester.UserId))
                         {
@@ -737,6 +795,7 @@ public static class GameServerApplication
                         }
 
                         var roomData = GetRoomInfo(roomId);
+                        startedRooms.TryAdd(roomId, 0);
 
                         var startMsg = JsonSerializer.Serialize(new
                         {
@@ -751,8 +810,7 @@ public static class GameServerApplication
                         // 모든 유저에게 단일 패킷 전송 (로비→게임 전환 데이터)
                         BroadcastMessageToRoomByRoomId(roomId, startMsg);
 
-                        // 게임이 시작되면 로비의 대기 방은 더 이상 참가할 수 없어야 한다.
-                        DeleteRoom(roomId);
+                        // 멤버십은 룸 채팅을 위해 유지하고 로비 목록/신규 입장에서만 숨긴다.
                         BroadcastRoomList();
 
                         return JsonSerializer.Serialize(new
@@ -761,6 +819,24 @@ public static class GameServerApplication
                             RoomId = roomId,
                             Message = "게임을 시작했습니다."
                         });
+                    }
+
+                case "close-match-room":
+                    {
+                        int roomId = doc.RootElement.GetProperty("RoomId").GetInt32();
+                        Session? requester = FindSessionByClient(client);
+                        if (requester == null || !IsRoomHost(roomId, requester.UserId))
+                            return JsonSerializer.Serialize(new { Command = "error", Message = "방장만 종료된 게임 방을 정리할 수 있습니다." });
+
+                        BroadcastMessageToRoomByRoomId(roomId, JsonSerializer.Serialize(new
+                        {
+                            Command = "room-closed",
+                            RoomId = roomId
+                        }));
+                        DeleteRoom(roomId);
+                        startedRooms.TryRemove(roomId, out _);
+                        BroadcastRoomList();
+                        return JsonSerializer.Serialize(new { Command = "close-match-room-result", Message = "게임 방을 정리했습니다." });
                     }
 
                 default:
@@ -1268,9 +1344,12 @@ public static class GameServerApplication
         var roomList = new List<object>();
         while (reader.Read())
         {
+            int roomId = reader.GetInt32("RoomId");
+            if (startedRooms.ContainsKey(roomId)) continue;
+
             roomList.Add(new
             {
-                RoomId = reader.GetInt32("RoomId"),
+                RoomId = roomId,
                 RoomName = reader.GetString("RoomName"),
                 Host = reader.GetString("Host"),
                 Difficulty = reader.GetString("Difficulty"),
@@ -1323,9 +1402,12 @@ public static class GameServerApplication
         var roomList = new List<object>();
         while (reader.Read())
         {
+            int roomId = reader.GetInt32("RoomId");
+            if (startedRooms.ContainsKey(roomId)) continue;
+
             roomList.Add(new
             {
-                RoomId = reader.GetInt32("RoomId"),
+                RoomId = roomId,
                 RoomName = reader.GetString("RoomName"),
                 Host = reader.GetString("Host"),
                 Difficulty = reader.GetString("Difficulty"),
