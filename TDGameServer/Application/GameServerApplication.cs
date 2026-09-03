@@ -516,6 +516,7 @@ public static class GameServerApplication
                         cmd.ExecuteNonQuery();
 
                         BroadcastRoomUpdate(roomId);
+                        BroadcastRoomList();
                         return JsonSerializer.Serialize(new { Command = "kick-result", Message = "플레이어를 강퇴했습니다." });
                     }
 
@@ -760,7 +761,7 @@ public static class GameServerApplication
                         int roomId = doc.RootElement.GetProperty("RoomId").GetInt32();
 
                         if (startedRooms.ContainsKey(roomId))
-                            return JsonSerializer.Serialize(new { Command = "room-info", Message = "이미 게임이 시작된 방입니다." });
+                            return JsonSerializer.Serialize(new { Command = "room-info", RoomId = roomId, Message = "이미 게임이 시작된 방입니다." });
 
                         using var conn = new MySqlConnection(connectionString);
                         conn.Open();
@@ -771,7 +772,7 @@ public static class GameServerApplication
                         using var reader = cmdRoom.ExecuteReader();
                         if (!reader.Read())
                         {
-                            return JsonSerializer.Serialize(new { Command = "room-info", Message = "방을 찾을 수 없습니다." });
+                            return JsonSerializer.Serialize(new { Command = "room-info", RoomId = roomId, Message = "방을 찾을 수 없습니다." });
                         }
 
                         string roomName = reader.GetString("RoomName");
@@ -1561,7 +1562,8 @@ public static class GameServerApplication
             Players = players
         });
 
-        BroadcastMessageToRoomByRoomId(roomId, jsonMsg);
+        // 참가자 패널뿐 아니라 로비에서 이 방의 상세 정보를 보고 있는 사용자도 즉시 갱신합니다.
+        BroadcastMessage(jsonMsg);
     }
 
     // ---------------- 방에 메시지 브로드캐스트 (roomId 기반) ----------------
