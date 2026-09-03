@@ -22,6 +22,7 @@ public static class GameServerApplication
     // 접속 세션 관리
     private static readonly ConcurrentDictionary<int, Session> sessions = new();
     private static readonly ConcurrentDictionary<int, byte> startedRooms = new();
+    private static UdpServer? udpServer;
 
     /// <summary>
     /// 실행 설정을 로드하고 TCP, UDP, 세션 모니터를 구성합니다.
@@ -40,13 +41,21 @@ public static class GameServerApplication
             shutdown.Cancel();
         };
 
-        using var udpServer = new UdpServer(options.UdpPort);
-        udpServer.Start();
+        using var udp = new UdpServer(options.UdpPort);
+        udpServer = udp;
+        udp.Start();
         MonitorSessions(shutdown.Token);
 
-        var tcpServer = new TcpServerHost(options.TcpPort, HandleRequest);
-        Console.WriteLine("서버를 종료하려면 Ctrl+C를 누르세요.");
-        await tcpServer.RunAsync(shutdown.Token);
+        try
+        {
+            var tcpServer = new TcpServerHost(options.TcpPort, HandleRequest);
+            Console.WriteLine("서버를 종료하려면 Ctrl+C를 누르세요.");
+            await tcpServer.RunAsync(shutdown.Token);
+        }
+        finally
+        {
+            udpServer = null;
+        }
     }
 
     /// <summary>브로드캐스트와 개별 응답이 같은 줄바꿈 전송 규칙을 사용하도록 위임합니다.</summary>
@@ -60,29 +69,114 @@ public static class GameServerApplication
         using var conn = new MySqlConnection(connectionString);
         conn.Open();
 
-        // 호스트가 방을 가지고 있는지 확인
-        var findRoomCmd = new MySqlCommand("SELECT RoomId FROM Rooms WHERE HostId=@uid", conn);
+        var findRoomCmd = new MySqlCommand("SELECT RoomId FROM RoomPlayers WHERE UserId=@uid LIMIT 1", conn);
         findRoomCmd.Parameters.AddWithValue("@uid", userId);
         var roomObj = findRoomCmd.ExecuteScalar();
 
         if (roomObj != null)
+            LeaveRoomAndTransferHost(Convert.ToInt32(roomObj), userId);
+    }
+
+    /// <summary>
+    /// 참가자를 슬롯에서 제거하고, 나간 사용자가 호스트라면 남은 참가자 중 가장 앞 슬롯을 새 호스트로 승격합니다.
+    /// TCP는 방 상태를 알리고 UDP는 직접 연결 대상과 게임 권한을 갱신합니다.
+    /// </summary>
+    private static string LeaveRoomAndTransferHost(int roomId, int userId)
+    {
+        using var conn = new MySqlConnection(connectionString);
+        conn.Open();
+        using var transaction = conn.BeginTransaction();
+
+        var memberCommand = new MySqlCommand(
+            "SELECT PlayerSlot, IsHost FROM RoomPlayers WHERE RoomId=@rid AND UserId=@uid", conn, transaction);
+        memberCommand.Parameters.AddWithValue("@rid", roomId);
+        memberCommand.Parameters.AddWithValue("@uid", userId);
+        using var memberReader = memberCommand.ExecuteReader();
+        if (!memberReader.Read()) return "해당 플레이어가 방에 없습니다.";
+        int playerSlot = memberReader.GetInt32("PlayerSlot");
+        bool wasHost = memberReader.GetBoolean("IsHost");
+        memberReader.Close();
+
+        var clearSlot = new MySqlCommand(@"
+            UPDATE RoomPlayers
+            SET UserId=0, Username='Open', IsHost=0, IsClosed=0
+            WHERE RoomId=@rid AND PlayerSlot=@slot", conn, transaction);
+        clearSlot.Parameters.AddWithValue("@rid", roomId);
+        clearSlot.Parameters.AddWithValue("@slot", playerSlot);
+        clearSlot.ExecuteNonQuery();
+
+        int newHostUserId = 0;
+        string newHostName = string.Empty;
+        if (wasHost)
         {
-            int roomId = Convert.ToInt32(roomObj);
+            var nextHost = new MySqlCommand(@"
+                SELECT UserId, Username FROM RoomPlayers
+                WHERE RoomId=@rid AND UserId<>0
+                ORDER BY PlayerSlot LIMIT 1", conn, transaction);
+            nextHost.Parameters.AddWithValue("@rid", roomId);
+            using var hostReader = nextHost.ExecuteReader();
+            if (hostReader.Read())
+            {
+                newHostUserId = hostReader.GetInt32("UserId");
+                newHostName = hostReader.GetString("Username");
+            }
+            hostReader.Close();
 
-            // 참가자 모두 제거
-            var delPlayers = new MySqlCommand("DELETE FROM RoomPlayers WHERE RoomId=@rid", conn);
-            delPlayers.Parameters.AddWithValue("@rid", roomId);
-            delPlayers.ExecuteNonQuery();
+            if (newHostUserId > 0)
+            {
+                var promote = new MySqlCommand(
+                    "UPDATE RoomPlayers SET IsHost=(UserId=@uid) WHERE RoomId=@rid", conn, transaction);
+                promote.Parameters.AddWithValue("@uid", newHostUserId);
+                promote.Parameters.AddWithValue("@rid", roomId);
+                promote.ExecuteNonQuery();
 
-            // 방 제거
-            var delRoom = new MySqlCommand("DELETE FROM Rooms WHERE RoomId=@rid", conn);
-            delRoom.Parameters.AddWithValue("@rid", roomId);
-            delRoom.ExecuteNonQuery();
-
-            // 모든 클라이언트에게 방이 닫혔음을 알림
-            BroadcastMessage(JsonSerializer.Serialize(new {Command = "room-closed", RoomId = roomId}));
-            startedRooms.TryRemove(roomId, out _);
+                var updateRoom = new MySqlCommand(
+                    "UPDATE Rooms SET HostId=@uid, Host=@name WHERE RoomId=@rid", conn, transaction);
+                updateRoom.Parameters.AddWithValue("@uid", newHostUserId);
+                updateRoom.Parameters.AddWithValue("@name", newHostName);
+                updateRoom.Parameters.AddWithValue("@rid", roomId);
+                updateRoom.ExecuteNonQuery();
+            }
+            else
+            {
+                var deletePlayers = new MySqlCommand("DELETE FROM RoomPlayers WHERE RoomId=@rid", conn, transaction);
+                deletePlayers.Parameters.AddWithValue("@rid", roomId);
+                deletePlayers.ExecuteNonQuery();
+                var deleteRoom = new MySqlCommand("DELETE FROM Rooms WHERE RoomId=@rid", conn, transaction);
+                deleteRoom.Parameters.AddWithValue("@rid", roomId);
+                deleteRoom.ExecuteNonQuery();
+            }
         }
+
+        transaction.Commit();
+
+        if (wasHost && newHostUserId == 0)
+        {
+            BroadcastMessage(JsonSerializer.Serialize(new { Command = "room-closed", RoomId = roomId }));
+            startedRooms.TryRemove(roomId, out _);
+            udpServer?.CloseRoom(roomId);
+            BroadcastRoomList();
+            return "마지막 참가자가 나가 방이 삭제되었습니다.";
+        }
+
+        BroadcastRoomUpdate(roomId);
+        BroadcastRoomList();
+        if (wasHost)
+        {
+            string hostChanged = JsonSerializer.Serialize(new
+            {
+                Command = "host-changed",
+                RoomId = roomId,
+                UserId = newHostUserId,
+                Username = newHostName,
+                DepartedUserId = userId
+            });
+            BroadcastMessageToRoomByRoomId(roomId, hostChanged);
+            udpServer?.PromoteHost(roomId, newHostUserId, userId);
+            return $"호스트가 {newHostName}님으로 이전되었습니다.";
+        }
+
+        return "방에서 나갔습니다.";
     }
 
     // 요청 처리
@@ -643,61 +737,12 @@ public static class GameServerApplication
                     {
                         int roomId = doc.RootElement.GetProperty("RoomId").GetInt32();
                         int userId = doc.RootElement.GetProperty("UserId").GetInt32();
+                        Session? requester = FindSessionByClient(client);
+                        if (requester == null || requester.UserId != userId)
+                            return JsonSerializer.Serialize(new { Command = "error", Message = "본인만 방에서 나갈 수 있습니다." });
 
-                        using var conn = new MySqlConnection(connectionString);
-                        conn.Open();
-
-                        // 현재 유저가 호스트인지 확인
-                        var hostCheckCmd = new MySqlCommand("SELECT IsHost, PlayerSlot FROM RoomPlayers WHERE RoomId=@rid AND UserId=@uid", conn);
-                        hostCheckCmd.Parameters.AddWithValue("@rid", roomId);
-                        hostCheckCmd.Parameters.AddWithValue("@uid", userId);
-                        using var reader = hostCheckCmd.ExecuteReader();
-
-                        if (!reader.Read())
-                            return JsonSerializer.Serialize(new { Command = "exit-room-result", Message = "해당 플레이어가 방에 없습니다." });
-
-                        bool isHost = reader.GetBoolean("IsHost");
-                        int playerSlot = reader.GetInt32("PlayerSlot");
-                        reader.Close();
-
-                        if (isHost)
-                        {
-                            // 1) Host가 나가면 전체 방 삭제
-                            var deletePlayersCmd = new MySqlCommand("DELETE FROM RoomPlayers WHERE RoomId=@rid", conn);
-                            deletePlayersCmd.Parameters.AddWithValue("@rid", roomId);
-                            deletePlayersCmd.ExecuteNonQuery();
-
-                            var deleteRoomCmd = new MySqlCommand("DELETE FROM Rooms WHERE RoomId=@rid", conn);
-                            deleteRoomCmd.Parameters.AddWithValue("@rid", roomId);
-                            deleteRoomCmd.ExecuteNonQuery();
-
-                            // 방이 사라졌음을 참가자들에게 알림
-                            BroadcastMessage(JsonSerializer.Serialize(new { Command = "room-closed", RoomId = roomId }));
-
-                            // 로비 목록 갱신
-                            BroadcastRoomList();
-
-                            return JsonSerializer.Serialize(new { Command = "exit-room-result", Message = "방이 삭제되었습니다." });
-                        }
-                        else
-                        {
-                            // 2) 일반 플레이어 나가기 → 슬롯 초기화
-                            var updateCmd = new MySqlCommand(@"
-                                                            UPDATE RoomPlayers
-                                                            SET UserId=0, Username='Open', IsClosed=0
-                                                            WHERE RoomId=@rid AND PlayerSlot=@slot", conn);
-                            updateCmd.Parameters.AddWithValue("@rid", roomId);
-                            updateCmd.Parameters.AddWithValue("@slot", playerSlot);
-                            updateCmd.ExecuteNonQuery();
-
-                            // 남은 참가자들에게 방 정보 갱신
-                            BroadcastRoomUpdate(roomId);
-
-                            // 로비 목록 갱신
-                            BroadcastRoomList();
-
-                            return JsonSerializer.Serialize(new { Command = "exit-room-result", Message = "방에서 나갔습니다." });
-                        }
+                        string leaveMessage = LeaveRoomAndTransferHost(roomId, userId);
+                        return JsonSerializer.Serialize(new { Command = "exit-room-result", Message = leaveMessage });
                     }
 
                 case "request-room-list":
