@@ -4,6 +4,7 @@
 # .NET build output
 **/bin/
 **/obj/
+/deploy/artifacts/
 
 # Local IDE and OS files
 .vs/
